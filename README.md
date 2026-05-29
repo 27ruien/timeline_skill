@@ -45,7 +45,14 @@ python3 -m pip install -r requirements.txt
 http://127.0.0.1:8765
 ```
 
-在网页里填写项目标题、选择是否需要 `Model` / `Status`，粘贴事项清单，然后点击 `生成 Excel`。
+在网页里填写项目标题、选择是否需要 `Model` / `Status`，然后在表格里逐行填写事项，点击 `生成 Excel`。
+
+页面支持：
+
+- 点击 `新增事项` 增加一行，不需要手写序号。
+- 每个字段都有固定输入位置，不需要手写逗号。
+- 责任方用下拉框选择。
+- 如果已有一段文本，也可以点 `粘贴文本` 使用旧的粘贴输入方式。
 
 ### Model / Status 勾选项
 
@@ -166,7 +173,8 @@ Kivisense, brand  两列都打勾
 3. 进入 timeline_skill 文件夹
 4. 双击 start.command
 5. 第一次启动会自动安装依赖，等浏览器打开
-6. 在打开的本地网页里选择是否需要 Model / Status，填写内容并生成 Excel
+6. 在打开的本地网页里选择是否需要 Model / Status
+7. 点击新增事项，逐行填写内容并生成 Excel
 
 使用 Codex 的同事：
 git clone https://github.com/27ruien/timeline_skill.git ~/.codex/skills/timeline-maker

@@ -80,7 +80,7 @@ INDEX_HTML = """<!doctype html>
       font-weight: 650;
       margin: 0 0 8px;
     }
-    input, textarea {
+    input, select, textarea {
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 6px;
@@ -89,7 +89,7 @@ INDEX_HTML = """<!doctype html>
       outline: none;
       background: #fff;
     }
-    input {
+    input, select {
       height: 40px;
       padding: 8px 10px;
       margin-bottom: 18px;
@@ -106,6 +106,60 @@ INDEX_HTML = """<!doctype html>
       padding: 12px;
       line-height: 1.55;
       tab-size: 2;
+    }
+    .task-table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+    table {
+      width: 100%;
+      min-width: 920px;
+      border-collapse: collapse;
+      background: #fff;
+    }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 8px;
+      vertical-align: middle;
+    }
+    th {
+      font-size: 12px;
+      text-align: left;
+      background: var(--soft);
+      color: var(--muted);
+      font-weight: 700;
+    }
+    td input, td select {
+      margin-bottom: 0;
+      height: 34px;
+      border-radius: 4px;
+    }
+    .col-index { width: 44px; text-align: center; color: var(--muted); }
+    .col-model { width: 130px; }
+    .col-task { min-width: 260px; }
+    .col-owner { width: 190px; }
+    .col-date { width: 150px; }
+    .col-days { width: 110px; }
+    .col-action { width: 72px; text-align: center; }
+    .icon-button {
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      border-radius: 6px;
+      background: #fee2e2;
+      color: var(--danger);
+      font-weight: 800;
+    }
+    .text-mode {
+      margin-top: 18px;
+      display: none;
+    }
+    .text-mode.open {
+      display: block;
+    }
+    .text-mode textarea {
+      min-height: 180px;
     }
     .hint {
       margin: 0 0 18px;
@@ -182,11 +236,35 @@ INDEX_HTML = """<!doctype html>
       </div>
       <p class="hint" id="formatHint">每行格式：<br><code>事项名称, 责任方, 开始日期, 工作日天数</code></p>
       <p class="hint">责任方可写 <code>Kivisense</code>、<code>brand</code>，或两者都写。</p>
+      <button class="secondary" id="addTaskButton" type="button">新增事项</button>
+      <br><br>
       <button class="secondary" id="sampleButton" type="button">填入示例</button>
     </aside>
     <section>
-      <label for="tasks">事项清单</label>
-      <textarea id="tasks" spellcheck="false"></textarea>
+      <label>事项清单</label>
+      <div class="task-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th class="col-index">#</th>
+              <th class="col-model" data-model-col>Model</th>
+              <th class="col-task">事项名称</th>
+              <th class="col-owner">责任方</th>
+              <th class="col-date">开始日期</th>
+              <th class="col-days">工作日天数</th>
+              <th class="col-action"></th>
+            </tr>
+          </thead>
+          <tbody id="taskRows"></tbody>
+        </table>
+      </div>
+      <div class="actions">
+        <button class="secondary" id="toggleTextButton" type="button">粘贴文本</button>
+      </div>
+      <div class="text-mode" id="textMode">
+        <label for="tasks">粘贴事项清单</label>
+        <textarea id="tasks" spellcheck="false"></textarea>
+      </div>
       <div class="actions">
         <button class="primary" id="generateButton" type="button">生成 Excel</button>
         <div class="status" id="inlineStatus"></div>
@@ -208,11 +286,29 @@ INDEX_HTML = """<!doctype html>
     const statusEl = document.getElementById("status");
     const inlineStatusEl = document.getElementById("inlineStatus");
     const tasksEl = document.getElementById("tasks");
+    const taskRowsEl = document.getElementById("taskRows");
     const projectEl = document.getElementById("projectName");
     const includeModelEl = document.getElementById("includeModel");
     const includeStatusEl = document.getElementById("includeStatus");
     const formatHintEl = document.getElementById("formatHint");
+    const textModeEl = document.getElementById("textMode");
+    const toggleTextButton = document.getElementById("toggleTextButton");
     const button = document.getElementById("generateButton");
+
+    const standardRows = [
+      { model: "", name: "Project requirement", owner: "Kivisense", start: "2026-06-01", workdays: 5 },
+      { model: "", name: "Creative Proposal", owner: "Both", start: "2026-06-08", workdays: 10 },
+      { model: "", name: "Development & Integration", owner: "Kivisense", start: "2026-06-15", workdays: 8 },
+      { model: "", name: "Brand Asset Review", owner: "Brands", start: "2026-06-18", workdays: 4 },
+      { model: "", name: "Launch online", owner: "Both", start: "2026-06-30", workdays: 1 }
+    ];
+    const modelRows = [
+      { model: "需求", name: "Project requirement", owner: "Kivisense", start: "2026-06-01", workdays: 5 },
+      { model: "设计", name: "Creative Proposal", owner: "Both", start: "2026-06-08", workdays: 10 },
+      { model: "开发", name: "Development & Integration", owner: "Kivisense", start: "2026-06-15", workdays: 8 },
+      { model: "需求", name: "Scope addendum", owner: "Brands", start: "2026-06-18", workdays: 4 },
+      { model: "上线", name: "Launch online", owner: "Both", start: "2026-06-30", workdays: 1 }
+    ];
 
     function currentSample() {
       return includeModelEl.checked ? modelSample : standardSample;
@@ -222,18 +318,101 @@ INDEX_HTML = """<!doctype html>
       formatHintEl.innerHTML = includeModelEl.checked
         ? '每行格式：<br><code>Model, 事项名称, 责任方, 开始日期, 工作日天数</code>'
         : '每行格式：<br><code>事项名称, 责任方, 开始日期, 工作日天数</code>';
+      document.querySelectorAll("[data-model-col]").forEach((el) => {
+        el.style.display = includeModelEl.checked ? "" : "none";
+      });
     }
 
     tasksEl.value = currentSample();
     updateFormatHint();
 
+    function ownerToList(owner) {
+      if (owner === "Both") return ["Kivisense", "Brands"];
+      if (owner === "Kivisense") return ["Kivisense"];
+      if (owner === "Brands") return ["Brands"];
+      return [];
+    }
+
+    function addRow(task = {}) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td class="col-index"></td>
+        <td class="col-model" data-model-col><input data-field="model" placeholder="需求"></td>
+        <td class="col-task"><input data-field="name" placeholder="事项名称"></td>
+        <td class="col-owner">
+          <select data-field="owner">
+            <option value="">未指定</option>
+            <option value="Kivisense">Kivisense</option>
+            <option value="Brands">Brands</option>
+            <option value="Both">Kivisense + brand</option>
+          </select>
+        </td>
+        <td class="col-date"><input data-field="start" type="date"></td>
+        <td class="col-days"><input data-field="workdays" type="number" min="1" step="1" placeholder="5"></td>
+        <td class="col-action"><button class="icon-button" type="button" title="删除">×</button></td>
+      `;
+      taskRowsEl.appendChild(tr);
+      tr.querySelector('[data-field="model"]').value = task.model || "";
+      tr.querySelector('[data-field="name"]').value = task.name || "";
+      tr.querySelector('[data-field="owner"]').value = task.owner || "";
+      tr.querySelector('[data-field="start"]').value = task.start || "";
+      tr.querySelector('[data-field="workdays"]').value = task.workdays || "";
+      tr.querySelector("button").addEventListener("click", () => {
+        if (taskRowsEl.children.length > 1) {
+          tr.remove();
+          renumberRows();
+        }
+      });
+      updateFormatHint();
+      renumberRows();
+    }
+
+    function renumberRows() {
+      [...taskRowsEl.children].forEach((row, index) => {
+        row.querySelector(".col-index").textContent = index + 1;
+      });
+    }
+
+    function fillRows(rows) {
+      taskRowsEl.innerHTML = "";
+      rows.forEach(addRow);
+    }
+
+    function collectRows() {
+      const rows = [...taskRowsEl.children].map((row, index) => {
+        const model = row.querySelector('[data-field="model"]').value.trim();
+        const name = row.querySelector('[data-field="name"]').value.trim();
+        const owner = row.querySelector('[data-field="owner"]').value;
+        const start = row.querySelector('[data-field="start"]').value;
+        const workdays = Number(row.querySelector('[data-field="workdays"]').value);
+        if (!name && !start && !workdays && !model) return null;
+        if (!name) throw new Error(`第 ${index + 1} 行缺少事项名称`);
+        if (includeModelEl.checked && !model) throw new Error(`第 ${index + 1} 行缺少 Model`);
+        if (!start) throw new Error(`第 ${index + 1} 行缺少开始日期`);
+        if (!Number.isInteger(workdays) || workdays < 1) throw new Error(`第 ${index + 1} 行工作日天数无效`);
+        return { model, name, owners: ownerToList(owner), start, workdays };
+      }).filter(Boolean);
+      if (!rows.length) throw new Error("请至少填写一条事项");
+      return rows;
+    }
+
+    fillRows(standardRows);
+
     document.getElementById("sampleButton").addEventListener("click", () => {
       tasksEl.value = currentSample();
+      fillRows(includeModelEl.checked ? modelRows : standardRows);
       inlineStatusEl.textContent = "";
       statusEl.textContent = "";
       statusEl.className = "status";
     });
-    includeModelEl.addEventListener("change", updateFormatHint);
+    includeModelEl.addEventListener("change", () => {
+      updateFormatHint();
+    });
+    document.getElementById("addTaskButton").addEventListener("click", () => addRow());
+    toggleTextButton.addEventListener("click", () => {
+      textModeEl.classList.toggle("open");
+      toggleTextButton.textContent = textModeEl.classList.contains("open") ? "收起文本" : "粘贴文本";
+    });
 
     async function generate() {
       button.disabled = true;
@@ -241,12 +420,14 @@ INDEX_HTML = """<!doctype html>
       statusEl.textContent = "";
       statusEl.className = "status";
       try {
+        const tableTasks = collectRows();
         const response = await fetch("/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             project_name: projectEl.value,
             raw_tasks: tasksEl.value,
+            tasks: tableTasks,
             include_model: includeModelEl.checked,
             include_status: includeStatusEl.checked
           })
@@ -351,7 +532,8 @@ class TimelineRequestHandler(BaseHTTPRequestHandler):
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
             include_model = bool(payload.get("include_model", False))
             include_status = bool(payload.get("include_status", True))
-            tasks = parse_raw_tasks(payload.get("raw_tasks", ""), include_model=include_model)
+            structured_tasks = payload.get("tasks")
+            tasks = structured_tasks if structured_tasks else parse_raw_tasks(payload.get("raw_tasks", ""), include_model=include_model)
             config = {
                 "project_name": payload.get("project_name") or "Timeline",
                 "tasks": tasks,
