@@ -16,7 +16,7 @@ When the user only provides content, infer the workbook structure and build the 
 Accept terse rows in Chinese or English. Normalize each row into:
 
 ```text
-task_name | owners | start_date | workday_duration | optional_group | optional_color | optional_status
+optional_model | task_name | owners | start_date | workday_duration | optional_color | optional_status
 ```
 
 Examples:
@@ -25,6 +25,7 @@ Examples:
 1. Project requirement, Kivisense, 2026-06-01, 5天
 2. Creative Proposal - detail version, Kivisense, brand, 2026-06-08, 10天
 3. Launch online, Kivisense + brand, 2026-08-18, 1 workday
+4. 需求, Scope addendum, brand, 2026-06-18, 4天
 ```
 
 Rules:
@@ -37,6 +38,8 @@ Rules:
 - Durations are business days; skip Saturdays and Sundays.
 - If a status is not explicitly provided, treat it as incomplete. In this visual style, leave `Status` blank rather than marking a completion check.
 - If the user requests literal status labels, use `未完成` for default incomplete instead of blank.
+- If `include_model` is enabled, treat the first field in each row as `Model`, group rows with the same model together even if they were entered non-adjacently, and merge the `Model` cells in the output.
+- If `include_status` is false, omit the `Status` column entirely.
 
 For more parsing examples, see `references/input-schema.md`.
 
@@ -45,11 +48,9 @@ For more parsing examples, see `references/input-schema.md`.
 Default to the 0528-style streamlined layout unless the user asks for batch/phase structure:
 
 ```text
-A: Description
-B: Kivisense
-C: Brands
-D: Status
-E onward: weekday timeline
+A: optional Model or Description
+Next: Description, Kivisense, Brands, optional Status
+Then: weekday timeline
 ```
 
 Header rows:
@@ -59,8 +60,9 @@ Header rows:
 - Row 3: left headers and merged month headers.
 - Row 4: day numbers for each weekday date.
 - Row 5 onward: task rows.
+- When `Model` is enabled, sort/group by first-seen model order and merge each model block vertically.
 
-Freeze panes at the first date/data cell when possible (`E5`) so owner columns remain visible.
+Freeze panes at the first date/data cell so owner columns remain visible.
 
 ## Timeline Rules
 
@@ -131,9 +133,12 @@ Input JSON shape:
 ```json
 {
   "project_name": "AR Campaign",
+  "include_model": false,
+  "include_status": true,
   "literal_incomplete_status": false,
   "tasks": [
     {
+      "model": "需求",
       "name": "Project requirement",
       "owners": ["Kivisense", "Brands"],
       "start": "2026-06-01",

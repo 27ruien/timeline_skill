@@ -22,6 +22,31 @@ Canonical form:
 }
 ```
 
+## Model Rows
+
+When `include_model` is enabled, parse each line as:
+
+```text
+Model, 事项名称, 责任方, 开始日期, 工作日天数
+```
+
+Example:
+
+```text
+1. 需求, Project requirement, Kivisense, 2026-06-01, 5天
+14. 需求, Scope addendum, brand, 2026-06-18, 4天
+2. 设计, Creative Proposal, Kivisense, brand, 2026-06-08, 10天
+```
+
+Output rules:
+
+- Group the same Model together even if the rows were entered non-adjacently.
+- Preserve item order inside each Model group.
+- Merge the Model cells vertically for each group.
+- Keep Description as separate rows for each task.
+
+If `include_status` is false, omit the Status column entirely.
+
 ## Owner Parsing
 
 - `kivisense`, `Kivisense`, `KV`, `我方` -> `Kivisense`

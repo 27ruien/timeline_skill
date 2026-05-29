@@ -94,6 +94,12 @@ INDEX_HTML = """<!doctype html>
       padding: 8px 10px;
       margin-bottom: 18px;
     }
+    input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      accent-color: var(--accent);
+    }
     textarea {
       min-height: 440px;
       resize: vertical;
@@ -106,6 +112,18 @@ INDEX_HTML = """<!doctype html>
       color: var(--muted);
       font-size: 13px;
       line-height: 1.55;
+    }
+    .options {
+      display: grid;
+      gap: 10px;
+      margin: 0 0 18px;
+    }
+    .option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 650;
     }
     .actions {
       display: flex;
@@ -158,8 +176,12 @@ INDEX_HTML = """<!doctype html>
     <aside>
       <label for="projectName">项目标题</label>
       <input id="projectName" maxlength="20" value="AR Campaign">
-      <p class="hint">每行格式：<br><code>事项名称, 责任方, 开始日期, 工作日天数</code></p>
-      <p class="hint">责任方可写 <code>Kivisense</code>、<code>brand</code>，或两者都写。Status 默认未完成。</p>
+      <div class="options">
+        <label class="option"><input id="includeModel" type="checkbox"> Model</label>
+        <label class="option"><input id="includeStatus" type="checkbox" checked> Status</label>
+      </div>
+      <p class="hint" id="formatHint">每行格式：<br><code>事项名称, 责任方, 开始日期, 工作日天数</code></p>
+      <p class="hint">责任方可写 <code>Kivisense</code>、<code>brand</code>，或两者都写。</p>
       <button class="secondary" id="sampleButton" type="button">填入示例</button>
     </aside>
     <section>
@@ -172,26 +194,46 @@ INDEX_HTML = """<!doctype html>
     </section>
   </main>
   <script>
-    const sample = `1. Project requirement, Kivisense, 2026-06-01, 5天
+    const standardSample = `1. Project requirement, Kivisense, 2026-06-01, 5天
 2. Creative Proposal, Kivisense, brand, 2026-06-08, 10天
 3. Development & Integration, Kivisense, 2026-06-15, 8天
 4. Brand Asset Review, brand, 2026-06-18, 4天
 5. Launch online, Kivisense, brand, 2026-06-30, 1天`;
+    const modelSample = `1. 需求, Project requirement, Kivisense, 2026-06-01, 5天
+2. 设计, Creative Proposal, Kivisense, brand, 2026-06-08, 10天
+3. 开发, Development & Integration, Kivisense, 2026-06-15, 8天
+4. 需求, Scope addendum, brand, 2026-06-18, 4天
+5. 上线, Launch online, Kivisense, brand, 2026-06-30, 1天`;
 
     const statusEl = document.getElementById("status");
     const inlineStatusEl = document.getElementById("inlineStatus");
     const tasksEl = document.getElementById("tasks");
     const projectEl = document.getElementById("projectName");
+    const includeModelEl = document.getElementById("includeModel");
+    const includeStatusEl = document.getElementById("includeStatus");
+    const formatHintEl = document.getElementById("formatHint");
     const button = document.getElementById("generateButton");
 
-    tasksEl.value = sample;
+    function currentSample() {
+      return includeModelEl.checked ? modelSample : standardSample;
+    }
+
+    function updateFormatHint() {
+      formatHintEl.innerHTML = includeModelEl.checked
+        ? '每行格式：<br><code>Model, 事项名称, 责任方, 开始日期, 工作日天数</code>'
+        : '每行格式：<br><code>事项名称, 责任方, 开始日期, 工作日天数</code>';
+    }
+
+    tasksEl.value = currentSample();
+    updateFormatHint();
 
     document.getElementById("sampleButton").addEventListener("click", () => {
-      tasksEl.value = sample;
+      tasksEl.value = currentSample();
       inlineStatusEl.textContent = "";
       statusEl.textContent = "";
       statusEl.className = "status";
     });
+    includeModelEl.addEventListener("change", updateFormatHint);
 
     async function generate() {
       button.disabled = true;
@@ -204,7 +246,9 @@ INDEX_HTML = """<!doctype html>
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             project_name: projectEl.value,
-            raw_tasks: tasksEl.value
+            raw_tasks: tasksEl.value,
+            include_model: includeModelEl.checked,
+            include_status: includeStatusEl.checked
           })
         });
         if (!response.ok) {
@@ -240,9 +284,10 @@ INDEX_HTML = """<!doctype html>
 
 DATE_RE = re.compile(r"\b\d{4}[-/]\d{1,2}[-/]\d{1,2}\b")
 DURATION_RE = re.compile(r"\b\d+\s*(?:天|day|days|workday|workdays|个工作日)\b", re.IGNORECASE)
+OWNER_RE = re.compile(r"kivisense|kv|brand|brands|client|我方|客户|品牌方", re.IGNORECASE)
 
 
-def parse_raw_tasks(raw_text: str) -> list[dict]:
+def parse_raw_tasks(raw_text: str, include_model: bool = False) -> list[dict]:
     tasks: list[dict] = []
     for line_number, raw_line in enumerate(raw_text.splitlines(), start=1):
         line = raw_line.strip()
@@ -264,16 +309,19 @@ def parse_raw_tasks(raw_text: str) -> list[dict]:
 
         name_part = line[: min(date_match.start(), duration_match.start())]
         pieces = [piece.strip() for piece in re.split(r"[,，/、]+", name_part) if piece.strip()]
-        filtered = [
-            piece
-            for piece in pieces
-            if not re.fullmatch(r"kivisense|kv|brand|brands|client|我方|客户|品牌方", piece, re.IGNORECASE)
-        ]
-        name = filtered[0] if filtered else pieces[0] if pieces else ""
+        filtered = [piece for piece in pieces if not OWNER_RE.fullmatch(piece)]
+        if include_model:
+            if len(filtered) < 2:
+                raise ValueError(f"第 {line_number} 行开启 Model 后，需要写：Model, 事项名称, 责任方, 开始日期, 工作日天数")
+            model = filtered[0]
+            name = filtered[1]
+        else:
+            model = ""
+            name = filtered[0] if filtered else pieces[0] if pieces else ""
         if not name:
             raise ValueError(f"第 {line_number} 行缺少事项名称")
 
-        tasks.append({"name": name, "owners": owners, "start": start, "workdays": int(workdays)})
+        tasks.append({"model": model, "name": name, "owners": owners, "start": start, "workdays": int(workdays)})
 
     if not tasks:
         raise ValueError("请至少输入一条事项")
@@ -301,10 +349,14 @@ class TimelineRequestHandler(BaseHTTPRequestHandler):
         try:
             length = int(self.headers.get("content-length", "0"))
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            tasks = parse_raw_tasks(payload.get("raw_tasks", ""))
+            include_model = bool(payload.get("include_model", False))
+            include_status = bool(payload.get("include_status", True))
+            tasks = parse_raw_tasks(payload.get("raw_tasks", ""), include_model=include_model)
             config = {
                 "project_name": payload.get("project_name") or "Timeline",
                 "tasks": tasks,
+                "include_model": include_model,
+                "include_status": include_status,
             }
             workbook = build_workbook(config)
             output = BytesIO()
@@ -354,9 +406,13 @@ class TimelineRequestHandler(BaseHTTPRequestHandler):
 def run_self_test() -> Path:
     config = {
         "project_name": "Local Test",
+        "include_model": True,
+        "include_status": False,
         "tasks": parse_raw_tasks(
-            """1. Project requirement, Kivisense, 2026-06-01, 5天
-2. Creative Proposal, Kivisense, brand, 2026-06-08, 10天"""
+            """1. 需求, Project requirement, Kivisense, 2026-06-01, 5天
+2. 设计, Creative Proposal, Kivisense, brand, 2026-06-08, 10天
+3. 需求, Scope addendum, brand, 2026-06-18, 4天""",
+            include_model=True,
         ),
     }
     workbook = build_workbook(config)

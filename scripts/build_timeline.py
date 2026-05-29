@@ -145,6 +145,16 @@ def assign_bar_colors(tasks: list[dict]) -> None:
         recent.append(task["bar_color"])
 
 
+def group_tasks_by_model(tasks: list[dict]) -> list[dict]:
+    model_order: dict[str, int] = {}
+    for task in tasks:
+        model = task.get("model") or "未分类"
+        task["model"] = model
+        if model not in model_order:
+            model_order[model] = len(model_order)
+    return sorted(tasks, key=lambda task: (model_order[task["model"]], task["original_index"]))
+
+
 def normalize_tasks(raw_tasks: list[dict]) -> list[dict]:
     tasks = []
     for index, raw in enumerate(raw_tasks, start=1):
@@ -171,9 +181,10 @@ def normalize_tasks(raw_tasks: list[dict]) -> list[dict]:
                 "status": status,
                 "category": infer_category(raw),
                 "color": raw.get("color") or raw.get("颜色"),
+                "model": str(raw.get("model") or raw.get("module") or raw.get("工作内容") or "").strip(),
+                "original_index": index,
             }
         )
-    assign_bar_colors(tasks)
     return tasks
 
 
@@ -198,6 +209,11 @@ def build_workbook(config: dict) -> Workbook:
     tasks = normalize_tasks(config.get("tasks", []))
     if not tasks:
         raise ValueError("Input JSON must include at least one task")
+    include_model = bool(config.get("include_model", False))
+    include_status = bool(config.get("include_status", True))
+    if include_model:
+        tasks = group_tasks_by_model(tasks)
+    assign_bar_colors(tasks)
 
     min_start = min(task["start"] for task in tasks)
     max_end = max(task["end"] for task in tasks)
@@ -208,7 +224,6 @@ def build_workbook(config: dict) -> Workbook:
     ws = wb.active
     ws.title = "Timeline"
     ws.sheet_view.showGridLines = False
-    ws.freeze_panes = "E5"
 
     thin = Side(style="thin", color="B7B7B7")
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
@@ -220,7 +235,17 @@ def build_workbook(config: dict) -> Workbook:
     project_name = config.get("project_name", "AR Campaign")
     literal_incomplete = bool(config.get("literal_incomplete_status", False))
 
-    last_col = 4 + len(days)
+    headers = []
+    if include_model:
+        headers.append("Model")
+    headers.extend(["Description", "Kivisense", "Brands"])
+    if include_status:
+        headers.append("Status")
+    column_index = {header: index for index, header in enumerate(headers, start=1)}
+    date_start_col = len(headers) + 1
+    ws.freeze_panes = f"{get_column_letter(date_start_col)}5"
+
+    last_col = len(headers) + len(days)
     last_row = 4 + len(tasks)
 
     ws.merge_cells(start_row=1, start_column=2, end_row=2, end_column=4)
@@ -239,7 +264,6 @@ def build_workbook(config: dict) -> Workbook:
         logo.anchor = one_cell_image_anchor(1, 1, logo_width, logo_height, 20, 18)
         ws.add_image(logo)
 
-    headers = ["Description", "Kivisense", "Brands", "Status"]
     for col, header in enumerate(headers, start=1):
         ws.merge_cells(start_row=3, start_column=col, end_row=4, end_column=col)
         cell = ws.cell(3, col)
@@ -249,41 +273,46 @@ def build_workbook(config: dict) -> Workbook:
         cell.fill = header_fill
         cell.border = border
 
-    month_start_col = 5
+    month_start_col = date_start_col
     current_month = days[0].month
-    for offset, day in enumerate(days, start=5):
+    for offset, day in enumerate(days, start=date_start_col):
         ws.cell(4, offset).value = day.day
         ws.cell(4, offset).font = header_font
         ws.cell(4, offset).alignment = Alignment(horizontal="center", vertical="center")
         ws.cell(4, offset).border = border
         if day.month != current_month:
             ws.merge_cells(start_row=3, start_column=month_start_col, end_row=3, end_column=offset - 1)
-            ws.cell(3, month_start_col).value = month_label(days[month_start_col - 5])
+            ws.cell(3, month_start_col).value = month_label(days[month_start_col - date_start_col])
             ws.cell(3, month_start_col).alignment = Alignment(horizontal="center", vertical="center")
             ws.cell(3, month_start_col).font = header_font
             current_month = day.month
             month_start_col = offset
     ws.merge_cells(start_row=3, start_column=month_start_col, end_row=3, end_column=last_col)
-    ws.cell(3, month_start_col).value = month_label(days[month_start_col - 5])
+    ws.cell(3, month_start_col).value = month_label(days[month_start_col - date_start_col])
     ws.cell(3, month_start_col).alignment = Alignment(horizontal="center", vertical="center")
     ws.cell(3, month_start_col).font = header_font
 
-    day_to_col = {day: index + 5 for index, day in enumerate(days)}
+    day_to_col = {day: index + date_start_col for index, day in enumerate(days)}
     for row_offset, task in enumerate(tasks, start=5):
-        ws.cell(row_offset, 1).value = task["name"]
-        ws.cell(row_offset, 1).alignment = Alignment(horizontal="left", vertical="center")
-        ws.cell(row_offset, 1).font = body_font
+        if include_model:
+            ws.cell(row_offset, column_index["Model"]).value = task["model"]
+
+        description_col = column_index["Description"]
+        ws.cell(row_offset, description_col).value = task["name"]
+        ws.cell(row_offset, description_col).alignment = Alignment(horizontal="left", vertical="center")
+        ws.cell(row_offset, description_col).font = body_font
 
         if "Kivisense" in task["owners"]:
-            ws.cell(row_offset, 2).value = "√"
+            ws.cell(row_offset, column_index["Kivisense"]).value = "√"
         if "Brands" in task["owners"]:
-            ws.cell(row_offset, 3).value = "√"
+            ws.cell(row_offset, column_index["Brands"]).value = "√"
 
-        completed_tokens = {"complete", "completed", "done", "完成", "已完成", "√"}
-        if task["status"] in completed_tokens:
-            ws.cell(row_offset, 4).value = "√"
-        elif literal_incomplete:
-            ws.cell(row_offset, 4).value = "未完成"
+        if include_status:
+            completed_tokens = {"complete", "completed", "done", "完成", "已完成", "√"}
+            if task["status"] in completed_tokens:
+                ws.cell(row_offset, column_index["Status"]).value = "√"
+            elif literal_incomplete:
+                ws.cell(row_offset, column_index["Status"]).value = "未完成"
 
         fill = PatternFill("solid", fgColor=task["bar_color"])
         for day in weekday_range(task["start"], task["end"]):
@@ -315,18 +344,37 @@ def build_workbook(config: dict) -> Workbook:
             font.name = "Microsoft YaHei"
             font.size = 8
             c.font = font
-            if col >= 2:
+            if col != description_col:
                 c.alignment = Alignment(horizontal="center", vertical="center")
+
+    if include_model:
+        model_col = column_index["Model"]
+        group_start = 5
+        while group_start <= last_row:
+            model = ws.cell(group_start, model_col).value
+            group_end = group_start
+            while group_end + 1 <= last_row and ws.cell(group_end + 1, model_col).value == model:
+                group_end += 1
+            if group_end > group_start:
+                ws.merge_cells(start_row=group_start, start_column=model_col, end_row=group_end, end_column=model_col)
+            cell = ws.cell(group_start, model_col)
+            cell.value = model
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            group_start = group_end + 1
 
     for row in range(3, 5):
         for col in range(1, last_col + 1):
             ws.cell(row, col).border = border
 
-    ws.column_dimensions["A"].width = 47
-    ws.column_dimensions["B"].width = 14
-    ws.column_dimensions["C"].width = 14
-    ws.column_dimensions["D"].width = 14
-    for col in range(5, last_col + 1):
+    for header, col in column_index.items():
+        letter = get_column_letter(col)
+        if header == "Description":
+            ws.column_dimensions[letter].width = 47
+        elif header == "Model":
+            ws.column_dimensions[letter].width = 16
+        else:
+            ws.column_dimensions[letter].width = 14
+    for col in range(date_start_col, last_col + 1):
         ws.column_dimensions[get_column_letter(col)].width = TIMELINE_COLUMN_WIDTH
     ws.row_dimensions[1].height = 46
     ws.row_dimensions[2].height = 46
