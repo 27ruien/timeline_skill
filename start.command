@@ -3,6 +3,8 @@ cd "$(dirname "$0")"
 
 echo "Starting Timeline Maker..."
 
+APP_URL="http://127.0.0.1:8765"
+
 if ! command -v python3 >/dev/null 2>&1; then
   echo "未找到 python3。请先安装 Python 3。"
   echo "可以从 https://www.python.org/downloads/ 下载。"
@@ -38,6 +40,14 @@ if [ $? -ne 0 ]; then
     echo "依赖安装失败。请检查网络后重新双击 start.command。"
     read "?按回车退出"
     exit 1
+  fi
+fi
+
+if command -v curl >/dev/null 2>&1; then
+  if curl -fsS "$APP_URL" >/dev/null 2>&1; then
+    echo "Timeline Maker 已经在运行，正在打开浏览器..."
+    open "$APP_URL"
+    exit 0
   fi
 fi
 
