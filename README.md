@@ -17,14 +17,6 @@ cd timeline_skill
 
 或直接在 GitHub 页面点击 `Code` -> `Download ZIP`，下载后解压。
 
-### 安装依赖
-
-首次使用需要安装 Excel 生成依赖：
-
-```bash
-python3 -m pip install -r requirements.txt
-```
-
 ### 启动
 
 macOS 可以双击：
@@ -33,10 +25,18 @@ macOS 可以双击：
 start.command
 ```
 
+第一次双击时，它会自动创建本地运行环境并安装依赖。这个过程可能需要几十秒。
+
 也可以在终端执行：
 
 ```bash
 python3 local_app.py
+```
+
+如果用终端启动，需要先安装依赖：
+
+```bash
+python3 -m pip install -r requirements.txt
 ```
 
 启动后会自动打开本地网页：
@@ -135,8 +135,8 @@ Kivisense, brand  两列都打勾
 1. 打开 https://github.com/27ruien/timeline_skill
 2. 下载仓库或执行 git clone
 3. 进入 timeline_skill 文件夹
-4. 执行 python3 -m pip install -r requirements.txt
-5. 双击 start.command，或执行 python3 local_app.py
+4. 双击 start.command
+5. 第一次启动会自动安装依赖，等浏览器打开
 6. 在打开的本地网页里填写内容并生成 Excel
 
 使用 Codex 的同事：
