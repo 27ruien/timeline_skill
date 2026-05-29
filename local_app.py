@@ -178,6 +178,100 @@ INDEX_HTML = """<!doctype html>
       border-color: var(--accent);
       box-shadow: 0 0 0 3px rgba(0, 176, 80, 0.12);
     }
+    .custom-select {
+      position: relative;
+    }
+    .select-trigger {
+      width: 100%;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+      font-weight: 400;
+      text-align: left;
+      padding: 0 11px;
+      cursor: pointer;
+    }
+    .select-trigger:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(0, 176, 80, 0.12);
+      outline: none;
+    }
+    .select-menu {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      right: 0;
+      z-index: 35;
+      display: none;
+      padding: 5px;
+      border: 1px solid #d9e2ec;
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: 0 14px 34px rgba(15, 23, 42, 0.12);
+    }
+    .custom-select.open .select-menu {
+      display: block;
+    }
+    .select-option {
+      width: 100%;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border: 0;
+      border-radius: 7px;
+      background: #fff;
+      color: #172033;
+      font: inherit;
+      font-weight: 400;
+      text-align: left;
+      padding: 0 9px;
+      cursor: pointer;
+    }
+    .select-option:hover {
+      background: #f6f8fb;
+    }
+    .select-option.selected {
+      color: #0f172a;
+      background: #fff;
+      font-weight: 520;
+    }
+    .select-option.selected::before {
+      content: "✓";
+      width: 14px;
+      color: var(--accent);
+      font-weight: 760;
+    }
+    .select-option:not(.selected)::before {
+      content: "";
+      width: 14px;
+    }
+    .select-chevron {
+      flex: 0 0 auto;
+      position: relative;
+      width: 14px;
+      height: 14px;
+      color: #475569;
+      font-size: 0;
+    }
+    .select-chevron::after {
+      content: "";
+      position: absolute;
+      left: 3px;
+      top: 4px;
+      width: 6px;
+      height: 6px;
+      border-right: 1.5px solid currentColor;
+      border-bottom: 1.5px solid currentColor;
+      transform: rotate(45deg);
+    }
     input[type="checkbox"] {
       width: 16px;
       height: 16px;
@@ -242,6 +336,12 @@ INDEX_HTML = """<!doctype html>
       color: var(--danger);
       background: #fff1f1;
       border-color: #ffd5d5;
+    }
+    .danger:disabled {
+      color: #d4dbe5;
+      background: transparent;
+      border-color: transparent;
+      cursor: not-allowed;
     }
     .section-head {
       display: flex;
@@ -389,22 +489,22 @@ INDEX_HTML = """<!doctype html>
     }
     .toast {
       position: fixed;
-      top: 18px;
+      top: 22px;
       left: 50%;
       z-index: 40;
       display: inline-flex;
       align-items: center;
-      gap: 10px;
-      min-width: 230px;
-      height: 52px;
-      padding: 0 22px;
-      border: 1px solid rgba(226, 232, 240, 0.92);
-      border-radius: 10px;
-      background: rgba(255, 255, 255, 0.92);
-      box-shadow: 0 16px 38px rgba(15, 23, 42, 0.13);
+      gap: 8px;
+      min-width: 154px;
+      height: 38px;
+      padding: 0 14px;
+      border: 1px solid rgba(226, 232, 240, 0.86);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.82);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
       color: #0f172a;
-      font-size: 16px;
-      font-weight: 720;
+      font-size: 13px;
+      font-weight: 560;
       pointer-events: none;
       opacity: 0;
       transform: translate(-50%, -10px);
@@ -416,18 +516,18 @@ INDEX_HTML = """<!doctype html>
       transform: translate(-50%, 0);
     }
     .toast-icon {
-      width: 22px;
-      height: 22px;
+      width: 20px;
+      height: 20px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       border-radius: 999px;
       color: #fff;
       background: var(--accent);
-      font-size: 14px;
-      font-weight: 800;
+      font-size: 13px;
+      font-weight: 760;
       line-height: 1;
-      box-shadow: 0 6px 14px rgba(0, 176, 80, 0.18);
+      box-shadow: 0 6px 14px rgba(0, 176, 80, 0.12);
     }
     .add-icon {
       display: inline-block;
@@ -649,6 +749,45 @@ INDEX_HTML = """<!doctype html>
       return [];
     }
 
+    function closeCustomSelects(except = null) {
+      document.querySelectorAll("[data-custom-select]").forEach((select) => {
+        if (select !== except) select.classList.remove("open");
+      });
+    }
+
+    function syncCustomSelect(select) {
+      const input = select.querySelector("input[type='hidden']");
+      const trigger = select.querySelector("[data-select-trigger]");
+      const options = [...select.querySelectorAll("[data-select-option]")];
+      const selected = options.find((option) => option.dataset.value === input.value) || options[0];
+      input.value = selected.dataset.value || "";
+      trigger.querySelector("[data-select-label]").textContent = selected.dataset.label || selected.textContent.trim();
+      options.forEach((option) => {
+        option.classList.toggle("selected", option === selected);
+      });
+    }
+
+    function wireCustomSelect(select) {
+      const input = select.querySelector("input[type='hidden']");
+      const trigger = select.querySelector("[data-select-trigger]");
+      const options = [...select.querySelectorAll("[data-select-option]")];
+      trigger.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const willOpen = !select.classList.contains("open");
+        closeCustomSelects(select);
+        select.classList.toggle("open", willOpen);
+      });
+      options.forEach((option) => {
+        option.addEventListener("click", (event) => {
+          event.stopPropagation();
+          input.value = option.dataset.value || "";
+          syncCustomSelect(select);
+          select.classList.remove("open");
+        });
+      });
+      syncCustomSelect(select);
+    }
+
     function showSuccessToast(message = "操作成功") {
       successToast.querySelector(".toast-text").textContent = message;
       successToast.classList.add("show");
@@ -673,6 +812,8 @@ INDEX_HTML = """<!doctype html>
     function renumberRows() {
       [...taskRowsEl.children].forEach((row, index) => {
         row.querySelector(".col-index").textContent = index + 1;
+        const deleteButton = row.querySelector("[data-action='delete']");
+        if (deleteButton) deleteButton.disabled = index === 0;
       });
     }
 
@@ -708,18 +849,32 @@ INDEX_HTML = """<!doctype html>
         <td class="col-model" data-model-col><input data-field="model" placeholder="需求" autocomplete="off"></td>
         <td class="col-task"><input data-field="name" placeholder="事项名称" autocomplete="off"></td>
         <td class="col-stakeholder">
-          <select data-field="stakeholder">
-            <option value="">未指定</option>
-            <option value="Kivisense">Kivisense</option>
-            <option value="Brands">brand</option>
-            <option value="Both">Kivisense + brand</option>
-          </select>
+          <div class="custom-select" data-custom-select>
+            <input data-field="stakeholder" type="hidden">
+            <button class="select-trigger" data-select-trigger type="button">
+              <span data-select-label>未指定</span>
+              <span class="select-chevron">⌄</span>
+            </button>
+            <div class="select-menu">
+              <button class="select-option" data-select-option data-value="" data-label="未指定" type="button">未指定</button>
+              <button class="select-option" data-select-option data-value="Kivisense" data-label="Kivisense" type="button">Kivisense</button>
+              <button class="select-option" data-select-option data-value="Brands" data-label="brand" type="button">brand</button>
+              <button class="select-option" data-select-option data-value="Both" data-label="Kivisense + brand" type="button">Kivisense + brand</button>
+            </div>
+          </div>
         </td>
         <td class="col-status" data-status-col>
-          <select data-field="status">
-            <option value="incomplete">未完成</option>
-            <option value="done">已完成</option>
-          </select>
+          <div class="custom-select" data-custom-select>
+            <input data-field="status" type="hidden">
+            <button class="select-trigger" data-select-trigger type="button">
+              <span data-select-label>未完成</span>
+              <span class="select-chevron">⌄</span>
+            </button>
+            <div class="select-menu">
+              <button class="select-option" data-select-option data-value="incomplete" data-label="未完成" type="button">未完成</button>
+              <button class="select-option" data-select-option data-value="done" data-label="已完成" type="button">已完成</button>
+            </div>
+          </div>
         </td>
         <td class="col-range">
           <span class="range-field">
@@ -728,8 +883,8 @@ INDEX_HTML = """<!doctype html>
             <input data-field="end" type="date" autocomplete="off" aria-label="结束日期">
           </span>
         </td>
-        <td class="col-days"><input data-field="workdays" type="number" min="1" step="1" placeholder="5" autocomplete="off"></td>
-        <td class="col-action"><button class="danger" type="button" title="删除" aria-label="删除">×</button></td>
+        <td class="col-days"><input data-field="workdays" type="number" min="0" step="1" placeholder="0" autocomplete="off"></td>
+        <td class="col-action"><button class="danger" data-action="delete" type="button" title="删除" aria-label="删除">×</button></td>
       `;
       taskRowsEl.appendChild(row);
       row.querySelector('[data-field="model"]').value = task.model || "";
@@ -737,12 +892,13 @@ INDEX_HTML = """<!doctype html>
       row.querySelector('[data-field="stakeholder"]').value = task.stakeholder || "";
       row.querySelector('[data-field="status"]').value = task.status || "incomplete";
       row.querySelector('[data-field="start"]').value = task.start || "";
-      row.querySelector('[data-field="workdays"]').value = task.workdays || "";
+      row.querySelector('[data-field="workdays"]').value = Object.prototype.hasOwnProperty.call(task, "workdays") ? task.workdays : 0;
       if (task.end) row.querySelector('[data-field="end"]').value = task.end;
 
+      row.querySelectorAll("[data-custom-select]").forEach(wireCustomSelect);
       wireDateLogic(row);
-      row.querySelector("button").addEventListener("click", () => {
-        if (taskRowsEl.children.length > 1) {
+      row.querySelector("[data-action='delete']").addEventListener("click", () => {
+        if (taskRowsEl.children.length > 1 && row !== taskRowsEl.firstElementChild) {
           row.remove();
           renumberRows();
         }
@@ -805,6 +961,7 @@ INDEX_HTML = """<!doctype html>
     });
     includeStatusEl.addEventListener("change", syncStatusVisibility);
     document.getElementById("addTaskButton").addEventListener("click", () => addRow());
+    document.addEventListener("click", () => closeCustomSelects());
 
     async function generate() {
       generateButton.disabled = true;
