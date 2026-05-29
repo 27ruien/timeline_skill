@@ -371,7 +371,7 @@ def build_workbook(config: dict) -> Workbook:
         if header == "Description":
             ws.column_dimensions[letter].width = 47
         elif header == "Model":
-            ws.column_dimensions[letter].width = 16
+            ws.column_dimensions[letter].width = 28
         else:
             ws.column_dimensions[letter].width = 14
     for col in range(date_start_col, last_col + 1):
