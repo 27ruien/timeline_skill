@@ -45,7 +45,7 @@ INDEX_HTML = """<!doctype html>
       font-family: "Google Sans Text", -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
       color: var(--ink);
       background: #f6f8fb;
-      padding-bottom: 112px;
+      padding-bottom: 124px;
     }
     .topbar {
       height: 92px;
@@ -444,8 +444,9 @@ INDEX_HTML = """<!doctype html>
       z-index: 20;
       display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 5px 6px;
+      gap: 10px;
+      max-width: calc(100vw - 48px);
+      padding: 6px;
       border: 1px solid rgba(203, 213, 225, 0.72);
       border-radius: 14px;
       background: rgba(255, 255, 255, 0.62);
@@ -464,12 +465,23 @@ INDEX_HTML = """<!doctype html>
     .floating-actions .primary,
     .floating-actions .secondary {
       position: relative;
-      min-width: 112px;
       height: 32px;
-      padding: 0 20px;
+      padding: 0 16px;
       border-radius: 10px;
       font-size: 13px;
       font-weight: 560;
+    }
+    .quick-actions {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      max-width: min(760px, calc(100vw - 250px));
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .quick-actions::-webkit-scrollbar {
+      display: none;
     }
     .floating-actions .primary {
       min-width: 118px;
@@ -572,9 +584,10 @@ INDEX_HTML = """<!doctype html>
       .floating-actions {
         left: 16px;
         right: 16px;
-        justify-content: space-between;
+        justify-content: flex-start;
         transform: none;
       }
+      .quick-actions { max-width: calc(100vw - 190px); }
     }
   </style>
 </head>
@@ -585,21 +598,21 @@ INDEX_HTML = """<!doctype html>
         <img class="brand-logo" src="/assets/kivisense-logo.png" alt="Kivisense">
       </div>
       <section class="example-panel">
-        <div class="example-title">示例</div>
+        <div class="example-title">Example</div>
         <div class="example-list">
           <div class="example-item">
             <span class="example-model">需求</span>
             <span>Project requirement</span>
             <span>Kivisense</span>
             <span class="example-date">2026-06-01 - 2026-06-05</span>
-            <span>5 工作日</span>
+            <span>5 workdays</span>
           </div>
           <div class="example-item">
             <span class="example-model">设计</span>
             <span>Creative Proposal</span>
             <span>Kivisense + brand</span>
             <span class="example-date">2026-06-08 - 2026-06-22</span>
-            <span>10 工作日</span>
+            <span>10 workdays</span>
           </div>
         </div>
       </section>
@@ -608,7 +621,7 @@ INDEX_HTML = """<!doctype html>
       <section class="project-panel">
         <div class="toolbar">
           <div>
-            <label for="projectName">项目标题</label>
+            <label for="projectName">Project title</label>
             <input id="projectName" maxlength="20" value="AR Campaign" autocomplete="off">
           </div>
           <div class="checks">
@@ -622,7 +635,7 @@ INDEX_HTML = """<!doctype html>
       <section class="task-panel">
         <div>
           <div class="section-head">
-            <label>事项清单</label>
+            <label>Task list</label>
           </div>
           <div class="table-wrap">
             <table>
@@ -631,11 +644,11 @@ INDEX_HTML = """<!doctype html>
                 <th class="col-drag"></th>
                 <th class="col-index">#</th>
                 <th class="col-model" data-model-col>Model</th>
-                <th class="col-task">事项名称</th>
-                <th class="col-stakeholder">相关方</th>
+                <th class="col-task">Task</th>
+                <th class="col-stakeholder">Stakeholder</th>
                 <th class="col-status" data-status-col>Status</th>
-                <th class="col-range">日期范围</th>
-                <th class="col-days">工作日</th>
+                <th class="col-range">Date range</th>
+                <th class="col-days">Workdays</th>
                 <th class="col-action"></th>
               </tr>
             </thead>
@@ -646,8 +659,17 @@ INDEX_HTML = """<!doctype html>
       </section>
     </main>
     <div class="floating-actions">
-      <button class="secondary" id="addTaskButton" type="button"><span class="add-icon">+</span>新增</button>
-      <button class="primary" id="generateButton" type="button">生成</button>
+      <div class="quick-actions" aria-label="Quick add tasks">
+        <button class="secondary" data-quick-add="需求" type="button"><span class="add-icon">+</span>需求</button>
+        <button class="secondary" data-quick-add="方案" type="button"><span class="add-icon">+</span>方案</button>
+        <button class="secondary" data-quick-add="设计" type="button"><span class="add-icon">+</span>设计</button>
+        <button class="secondary" data-quick-add="内容物料" type="button"><span class="add-icon">+</span>内容物料</button>
+        <button class="secondary" data-quick-add="内容制作" type="button"><span class="add-icon">+</span>内容制作</button>
+        <button class="secondary" data-quick-add="开发" type="button"><span class="add-icon">+</span>开发</button>
+        <button class="secondary" data-quick-add="UAT" type="button"><span class="add-icon">+</span>UAT</button>
+        <button class="secondary" data-quick-add="上线" type="button"><span class="add-icon">+</span>上线</button>
+      </div>
+      <button class="primary" id="generateButton" type="button">Generate</button>
     </div>
     <div class="toast" id="successToast" role="status" aria-live="polite">
       <span class="toast-icon">✓</span>
@@ -844,19 +866,19 @@ INDEX_HTML = """<!doctype html>
       const row = document.createElement("tr");
       row.draggable = true;
       row.innerHTML = `
-        <td class="col-drag"><span class="drag-handle" title="拖拽排序">⋮⋮</span></td>
+        <td class="col-drag"><span class="drag-handle" title="Drag to reorder">⋮⋮</span></td>
         <td class="col-index"></td>
         <td class="col-model" data-model-col><input data-field="model" placeholder="需求" autocomplete="off"></td>
-        <td class="col-task"><input data-field="name" placeholder="事项名称" autocomplete="off"></td>
+        <td class="col-task"><input data-field="name" placeholder="Task name" autocomplete="off"></td>
         <td class="col-stakeholder">
           <div class="custom-select" data-custom-select>
             <input data-field="stakeholder" type="hidden">
             <button class="select-trigger" data-select-trigger type="button">
-              <span data-select-label>未指定</span>
+              <span data-select-label>Unassigned</span>
               <span class="select-chevron">⌄</span>
             </button>
             <div class="select-menu">
-              <button class="select-option" data-select-option data-value="" data-label="未指定" type="button">未指定</button>
+              <button class="select-option" data-select-option data-value="" data-label="Unassigned" type="button">Unassigned</button>
               <button class="select-option" data-select-option data-value="Kivisense" data-label="Kivisense" type="button">Kivisense</button>
               <button class="select-option" data-select-option data-value="Brands" data-label="brand" type="button">brand</button>
               <button class="select-option" data-select-option data-value="Both" data-label="Kivisense + brand" type="button">Kivisense + brand</button>
@@ -867,24 +889,24 @@ INDEX_HTML = """<!doctype html>
           <div class="custom-select" data-custom-select>
             <input data-field="status" type="hidden">
             <button class="select-trigger" data-select-trigger type="button">
-              <span data-select-label>未完成</span>
+              <span data-select-label>Incomplete</span>
               <span class="select-chevron">⌄</span>
             </button>
             <div class="select-menu">
-              <button class="select-option" data-select-option data-value="incomplete" data-label="未完成" type="button">未完成</button>
-              <button class="select-option" data-select-option data-value="done" data-label="已完成" type="button">已完成</button>
+              <button class="select-option" data-select-option data-value="incomplete" data-label="Incomplete" type="button">Incomplete</button>
+              <button class="select-option" data-select-option data-value="done" data-label="Done" type="button">Done</button>
             </div>
           </div>
         </td>
         <td class="col-range">
           <span class="range-field">
-            <input data-field="start" type="date" autocomplete="off" aria-label="开始日期">
+            <input data-field="start" type="date" autocomplete="off" aria-label="Start date">
             <span class="range-sep">至</span>
-            <input data-field="end" type="date" autocomplete="off" aria-label="结束日期">
+            <input data-field="end" type="date" autocomplete="off" aria-label="End date">
           </span>
         </td>
         <td class="col-days"><input data-field="workdays" type="number" min="0" step="1" placeholder="0" autocomplete="off"></td>
-        <td class="col-action"><button class="danger" data-action="delete" type="button" title="删除" aria-label="删除">×</button></td>
+        <td class="col-action"><button class="danger" data-action="delete" type="button" title="Delete" aria-label="Delete">×</button></td>
       `;
       taskRowsEl.appendChild(row);
       row.querySelector('[data-field="model"]').value = task.model || "";
@@ -960,12 +982,16 @@ INDEX_HTML = """<!doctype html>
       syncModelVisibility();
     });
     includeStatusEl.addEventListener("change", syncStatusVisibility);
-    document.getElementById("addTaskButton").addEventListener("click", () => addRow());
+    document.querySelectorAll("[data-quick-add]").forEach((button) => {
+      button.addEventListener("click", () => {
+        addRow({ model: button.dataset.quickAdd || "" });
+      });
+    });
     document.addEventListener("click", () => closeCustomSelects());
 
     async function generate() {
       generateButton.disabled = true;
-      statusEl.textContent = "生成中...";
+      statusEl.textContent = "Generating...";
       statusEl.className = "status";
       try {
         const tasks = collectRows();
@@ -980,8 +1006,8 @@ INDEX_HTML = """<!doctype html>
           })
         });
         if (!response.ok) {
-          const problem = await response.json().catch(() => ({ error: "生成失败" }));
-          throw new Error(problem.error || "生成失败");
+          const problem = await response.json().catch(() => ({ error: "Generate failed" }));
+          throw new Error(problem.error || "Generate failed");
         }
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
