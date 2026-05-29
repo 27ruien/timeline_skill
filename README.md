@@ -1,8 +1,55 @@
 # Timeline Maker
 
-Kivisense 内部项目 timeline 自动生成 skill。用于把简单事项清单转换成 Excel 甘特排期表，自动生成日期轴、责任方勾选、未完成状态、甘特色块、结束星标和 Kivisense logo。
+Kivisense 内部项目 timeline 自动生成工具。可以作为 Codex skill 使用，也可以在本地打开一个网页工具使用。用于把简单事项清单转换成 Excel 甘特排期表，自动生成日期轴、责任方勾选、未完成状态、甘特色块、结束星标和 Kivisense logo。
 
-## 安装
+## 方式一：本地网页使用
+
+适合不使用 Codex 的同事。
+
+### 下载
+
+在本机终端执行：
+
+```bash
+git clone https://github.com/27ruien/timeline_skill.git
+cd timeline_skill
+```
+
+或直接在 GitHub 页面点击 `Code` -> `Download ZIP`，下载后解压。
+
+### 安装依赖
+
+首次使用需要安装 Excel 生成依赖：
+
+```bash
+python3 -m pip install -r requirements.txt
+```
+
+### 启动
+
+macOS 可以双击：
+
+```text
+start.command
+```
+
+也可以在终端执行：
+
+```bash
+python3 local_app.py
+```
+
+启动后会自动打开本地网页：
+
+```text
+http://127.0.0.1:8765
+```
+
+在网页里填写项目标题、粘贴事项清单，然后点击 `生成 Excel`。
+
+## 方式二：Codex Skill 使用
+
+适合已经在使用 Codex 的同事。
 
 在本机终端执行：
 
@@ -84,7 +131,15 @@ Kivisense, brand  两列都打勾
 ```text
 我们现在有一个 timeline 自动生成工具，可以把事项清单直接生成 Kivisense 风格 Excel 甘特排期表。
 
-首次使用请先安装：
+不用 Codex 的同事：
+1. 打开 https://github.com/27ruien/timeline_skill
+2. 下载仓库或执行 git clone
+3. 进入 timeline_skill 文件夹
+4. 执行 python3 -m pip install -r requirements.txt
+5. 双击 start.command，或执行 python3 local_app.py
+6. 在打开的本地网页里填写内容并生成 Excel
+
+使用 Codex 的同事：
 git clone https://github.com/27ruien/timeline_skill.git ~/.codex/skills/timeline-maker
 
 安装后重启 Codex，然后这样使用：
@@ -103,7 +158,14 @@ git clone https://github.com/27ruien/timeline_skill.git ~/.codex/skills/timeline
 
 ## 更新
 
-如果已经安装过，后续更新执行：
+如果是本地网页版本：
+
+```bash
+cd timeline_skill
+git pull
+```
+
+如果是 Codex skill 版本：
 
 ```bash
 cd ~/.codex/skills/timeline-maker
@@ -111,4 +173,3 @@ git pull
 ```
 
 然后重启 Codex。
-
