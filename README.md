@@ -45,14 +45,17 @@ python3 -m pip install -r requirements.txt
 http://127.0.0.1:8765
 ```
 
-在网页里填写项目标题、选择是否需要 `Model` / `Status`，然后在表格里逐行填写事项，点击 `生成 Excel`。
+在网页里填写项目标题、选择是否需要 `Model` / `Status`，然后在表格里逐行填写事项，点击右上角 `生成排期`。
 
 页面支持：
 
 - 点击 `新增事项` 增加一行，不需要手写序号。
 - 每个字段都有固定输入位置，不需要手写逗号。
-- 责任方用下拉框选择。
-- 如果已有一段文本，也可以点 `粘贴文本` 使用旧的粘贴输入方式。
+- 相关方用下拉框选择。
+- 拖拽每行左侧手柄，可以调整事项顺序。
+- 填写开始日期和工作日后，会自动展示结束日期。
+- 也可以直接选择结束日期，系统会反算工作日天数。
+- 生成甘特图时，以开始日期和结束日期为准。
 
 ### Model / Status 勾选项
 
@@ -60,19 +63,20 @@ http://127.0.0.1:8765
 - 不勾选 `Model`：输出表从 `Description` 开始。
 - 勾选 `Status`：输出表包含 `Status` 列。
 - 不勾选 `Status`：输出表不包含 `Status` 列。
+- 同一个 Model 会按第一次出现的 Model 顺序归组；同一个 Model 内的事项会按开始日期排序。
 
 如果勾选了 `Model`，每行格式变为：
 
 ```text
-Model, 事项名称, 责任方, 开始日期, 工作日天数
+Model, 事项名称, 相关方, 开始日期, 工作日天数或结束日期
 ```
 
 示例：
 
 ```text
-1. 需求, Project requirement, Kivisense, 2026-06-01, 5天
-2. 设计, Creative Proposal, Kivisense, brand, 2026-06-08, 10天
-14. 需求, Scope addendum, brand, 2026-06-18, 4天
+需求, Project requirement, Kivisense, 2026-06-01, 5天
+设计, Creative Proposal, Kivisense, brand, 2026-06-08, 2026-06-19
+需求, Scope addendum, brand, 2026-06-18, 4天
 ```
 
 输出时，第 1 行和第 14 行都会被归到 `需求` 下面，`Model` 单元格会合并；`Description` 仍然保留两行不同事项。
@@ -111,27 +115,27 @@ Codex 会输出一个 `.xlsx` 文件。
 
 ## 输入格式
 
-每条事项至少给 4 个信息：
+表格中每条事项至少填写：
 
 ```text
-事项名称, 责任方, 开始日期, 工作日天数
+事项名称, 相关方, 开始日期, 工作日天数或结束日期
 ```
 
 示例：
 
 ```text
-1. UI Design, Kivisense, 2026-06-01, 5天
-2. Asset Review, brand, 2026-06-03, 3天
-3. Development & Integration, Kivisense, brand, 2026-06-08, 10天
+UI Design, Kivisense, 2026-06-01, 5天
+Asset Review, brand, 2026-06-03, 2026-06-05
+Development & Integration, Kivisense, brand, 2026-06-08, 10天
 ```
 
 如果开启 `Model`，每条事项给 5 个信息：
 
 ```text
-Model, 事项名称, 责任方, 开始日期, 工作日天数
+Model, 事项名称, 相关方, 开始日期, 工作日天数或结束日期
 ```
 
-## 责任方规则
+## 相关方规则
 
 ```text
 Kivisense          只在 Kivisense 列打勾
@@ -174,7 +178,8 @@ Kivisense, brand  两列都打勾
 4. 双击 start.command
 5. 第一次启动会自动安装依赖，等浏览器打开
 6. 在打开的本地网页里选择是否需要 Model / Status
-7. 点击新增事项，逐行填写内容并生成 Excel
+7. 点击新增事项，逐行填写内容；需要调整顺序时拖拽行
+8. 点击右上角生成排期
 
 使用 Codex 的同事：
 git clone https://github.com/27ruien/timeline_skill.git ~/.codex/skills/timeline-maker
@@ -187,8 +192,9 @@ git clone https://github.com/27ruien/timeline_skill.git ~/.codex/skills/timeline
 3. 事项名称, brand, 2026-06-20, 3天
 
 规则：
-- Kivisense / brand 会自动在对应责任方列打勾
-- 天数按工作日计算，会跳过周末
+- Kivisense / brand 会自动在对应相关方列打勾
+- 可以填工作日天数自动算结束日期，也可以直接选择结束日期
+- 甘特图按开始日期和结束日期生成，会跳过周末
 - Status 默认未完成，所以不用写
 - 甘特图末尾会自动放星标
 - 如果勾选 Model，每行第一个字段写工作内容/模块，例如：需求, 事项名称, Kivisense, 2026-06-01, 5天

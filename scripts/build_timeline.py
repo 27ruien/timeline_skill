@@ -80,6 +80,10 @@ def weekday_range(start: date, end: date) -> list[date]:
     return days
 
 
+def count_workdays(start: date, end: date) -> int:
+    return len(weekday_range(start, end))
+
+
 def normalize_owners(owners) -> set[str]:
     if owners is None:
         return set()
@@ -152,7 +156,7 @@ def group_tasks_by_model(tasks: list[dict]) -> list[dict]:
         task["model"] = model
         if model not in model_order:
             model_order[model] = len(model_order)
-    return sorted(tasks, key=lambda task: (model_order[task["model"]], task["original_index"]))
+    return sorted(tasks, key=lambda task: (model_order[task["model"]], task["start"], task["original_index"]))
 
 
 def normalize_tasks(raw_tasks: list[dict]) -> list[dict]:
@@ -162,13 +166,20 @@ def normalize_tasks(raw_tasks: list[dict]) -> list[dict]:
         if not name:
             raise ValueError(f"Task #{index} is missing a name")
         start = parse_date(raw.get("start") or raw.get("start_date") or raw.get("开始日期"))
-        workdays_value = raw.get("workdays") or raw.get("duration") or raw.get("天数") or raw.get("工作日")
-        match = re.search(r"\d+", str(workdays_value))
-        if not match:
-            raise ValueError(f"Task #{index} is missing workday duration")
-        workdays = int(match.group(0))
         start = next_weekday(start)
-        end = add_workdays(start, workdays)
+        end_value = raw.get("end") or raw.get("end_date") or raw.get("结束日期")
+        workdays_value = raw.get("workdays") or raw.get("duration") or raw.get("天数") or raw.get("工作日")
+        workdays_match = re.search(r"\d+", str(workdays_value)) if workdays_value is not None else None
+        if end_value:
+            end = next_weekday(parse_date(end_value))
+            if end < start:
+                raise ValueError(f"Task #{index} end date is before start date")
+            workdays = count_workdays(start, end)
+        elif workdays_match:
+            workdays = int(workdays_match.group(0))
+            end = add_workdays(start, workdays)
+        else:
+            raise ValueError(f"Task #{index} is missing end date or workday duration")
         owners = normalize_owners(raw.get("owners") or raw.get("owner") or raw.get("责任人"))
         status = str(raw.get("status", "incomplete")).strip().lower()
         tasks.append(

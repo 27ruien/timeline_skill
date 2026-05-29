@@ -39,7 +39,9 @@ Rules:
 - If a status is not explicitly provided, treat it as incomplete. In this visual style, leave `Status` blank rather than marking a completion check.
 - If the user requests literal status labels, use `未完成` for default incomplete instead of blank.
 - If `include_model` is enabled, treat the first field in each row as `Model`, group rows with the same model together even if they were entered non-adjacently, and merge the `Model` cells in the output.
+- When grouping by Model, preserve the first-seen Model group order and sort tasks inside each Model by start date.
 - If `include_status` is false, omit the `Status` column entirely.
+- Support either `workdays` or `end` / `end_date`. If an end date is present, use the start/end date range for the Gantt bar. If only workdays are present, calculate the end date from workdays.
 
 For more parsing examples, see `references/input-schema.md`.
 
@@ -60,7 +62,7 @@ Header rows:
 - Row 3: left headers and merged month headers.
 - Row 4: day numbers for each weekday date.
 - Row 5 onward: task rows.
-- When `Model` is enabled, sort/group by first-seen model order and merge each model block vertically.
+- When `Model` is enabled, group by first-seen model order, sort each model block by start date, and merge each model block vertically.
 
 Freeze panes at the first date/data cell so owner columns remain visible.
 
@@ -71,7 +73,7 @@ Build date columns from the earliest task start to the latest computed task end,
 For each task:
 
 1. Parse start date.
-2. Compute the end date by counting the start date as workday 1.
+2. Use explicit end date when provided; otherwise compute the end date by counting the start date as workday 1.
 3. Fill every weekday column between start and end inclusive.
 4. Insert the small star marker from `assets/gantt-end-star.png` in the final workday cell of each task's Gantt bar.
 5. Leave non-active timeline cells white.
@@ -142,6 +144,7 @@ Input JSON shape:
       "name": "Project requirement",
       "owners": ["Kivisense", "Brands"],
       "start": "2026-06-01",
+      "end": "2026-06-05",
       "workdays": 5,
       "category": "planning"
     }

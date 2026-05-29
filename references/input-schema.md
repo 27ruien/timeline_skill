@@ -27,7 +27,7 @@ Canonical form:
 When `include_model` is enabled, parse each line as:
 
 ```text
-Model, 事项名称, 责任方, 开始日期, 工作日天数
+Model, 事项名称, 相关方, 开始日期, 工作日天数或结束日期
 ```
 
 Example:
@@ -41,7 +41,8 @@ Example:
 Output rules:
 
 - Group the same Model together even if the rows were entered non-adjacently.
-- Preserve item order inside each Model group.
+- Preserve first-seen Model group order.
+- Sort items inside each Model group by start date.
 - Merge the Model cells vertically for each group.
 - Keep Description as separate rows for each task.
 
@@ -60,6 +61,8 @@ If `include_status` is false, omit the Status column entirely.
 - Treat durations as business days by default.
 - Count the start date as day 1 if it is a weekday.
 - If start date is Saturday or Sunday, move start to the next Monday.
+- If an explicit end date is provided, use it for the Gantt range and derive workday count.
+- If no end date is provided, derive the end date from workday duration.
 
 ## Status Parsing
 
