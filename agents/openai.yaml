@@ -1,4 +1,4 @@
 interface:
-  display_name: "Chagee Timeline Maker"
-  short_description: "根据事项清单生成 Chagee 风格项目 timeline 甘特表"
-  default_prompt: "Use $chagee-timeline-maker to create a Chagee-style Excel timeline from task names, owners, start dates, and workday durations."
+  display_name: "Timeline Maker"
+  short_description: "根据事项清单生成 Kivisense 风格项目 timeline 甘特表"
+  default_prompt: "Use $timeline-maker to create a Kivisense-style Excel timeline from task names, owners, start dates, and workday durations."

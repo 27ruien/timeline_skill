@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a Chagee/Kivisense-style timeline workbook from JSON input."""
+"""Build a Kivisense-style timeline workbook from JSON input."""
 
 from __future__ import annotations
 
@@ -340,7 +340,7 @@ def build_workbook(config: dict) -> Workbook:
 
 def main() -> int:
     if len(sys.argv) != 3:
-        print("Usage: build_chagee_timeline.py input.json output.xlsx", file=sys.stderr)
+        print("Usage: build_timeline.py input.json output.xlsx", file=sys.stderr)
         return 2
     input_path = Path(sys.argv[1])
     output_path = Path(sys.argv[2])

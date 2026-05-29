@@ -1,4 +1,4 @@
-# Chagee Timeline Input Schema
+# Timeline Maker Input Schema
 
 ## Minimal Rows
 
@@ -43,7 +43,7 @@ Default status is incomplete.
 - no status, `未完成`, `pending`, `todo`, `not done` -> incomplete
 - `完成`, `已完成`, `done`, `complete`, `√` -> complete
 
-For Chagee-style output, incomplete usually displays as a blank `Status` cell. Only show the literal `未完成` when the user asks for literal status labels.
+For the default output style, incomplete usually displays as a blank `Status` cell. Only show the literal `未完成` when the user asks for literal status labels.
 
 ## Categories
 

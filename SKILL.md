@@ -1,13 +1,13 @@
 ---
-name: chagee-timeline-maker
-description: Create Chagee/Kivisense-style Excel project timeline and Gantt workbooks from simple task lists. Use when Codex needs to turn items such as "事项名称, Kivisense, brand, start date, 10 workdays" into a polished `.xlsx` timeline with weekday date columns, month headers, owner checkmarks, incomplete default status, and colored Gantt bars similar to the Chagee project Timeline 0527/0528 samples.
+name: timeline-maker
+description: Create Kivisense-style Excel project timeline and Gantt workbooks from simple task lists. Use when Codex needs to turn items such as "事项名称, Kivisense, brand, start date, 10 workdays" into a polished `.xlsx` timeline with weekday date columns, month headers, owner checkmarks, incomplete default status, square-like colored Gantt cells, end-marker stars, and Kivisense branding.
 ---
 
-# Chagee Timeline Maker
+# Timeline Maker
 
 ## Overview
 
-Create a client-facing Excel timeline from sparse task inputs. Match the Chagee sample style: one `Timeline` sheet, Kivisense/弥知科技 logo in the top-left header area, wide task description column, owner check columns, incomplete-by-default status, horizontal weekday calendar, merged month headers, colored bars for task durations, and an end-marker star at each task's final Gantt day.
+Create a client-facing Excel timeline from sparse task inputs. Match the Kivisense timeline style: one `Timeline` sheet, Kivisense/弥知科技 logo in the top-left header area, wide task description column, owner check columns, incomplete-by-default status, horizontal weekday calendar, merged month headers, colored bars for task durations, and an end-marker star at each task's final Gantt day.
 
 When the user only provides content, infer the workbook structure and build the `.xlsx`; do not ask for extra fields unless the schedule cannot be inferred.
 
@@ -35,7 +35,7 @@ Rules:
 - If no owner is present, leave both owner columns blank and continue.
 - `5天`, `5 days`, and `5 workdays` all mean 5 business days.
 - Durations are business days; skip Saturdays and Sundays.
-- If a status is not explicitly provided, treat it as incomplete. In the Chagee visual style this means leave `Status` blank rather than marking a completion check.
+- If a status is not explicitly provided, treat it as incomplete. In this visual style, leave `Status` blank rather than marking a completion check.
 - If the user requests literal status labels, use `未完成` for default incomplete instead of blank.
 
 For more parsing examples, see `references/input-schema.md`.
@@ -79,7 +79,7 @@ If the start date falls on a weekend, move the Gantt bar start to the next Monda
 
 ## Visual Style
 
-Match the Chagee samples closely:
+Match the Kivisense timeline style closely:
 
 - Font: Microsoft YaHei or an available Chinese-compatible sans-serif.
 - Header/task font size: 8-11 pt.
@@ -109,7 +109,7 @@ Preferred colors:
 
 1. Load this skill and the `spreadsheets` skill.
 2. Parse the user's list into structured tasks.
-3. If the request is straightforward, use `scripts/build_chagee_timeline.py` to generate the workbook quickly.
+3. If the request is straightforward, use `scripts/build_timeline.py` to generate the workbook quickly.
 4. If the user needs advanced formulas, dashboards, charts, or Google Sheets import, follow the `spreadsheets` skill workflow and recreate the same layout with the spreadsheet authoring tooling.
 5. Visually verify the output by rendering or inspecting the first sheet. Check that:
    - Month headers align with dates.
@@ -123,7 +123,7 @@ Preferred colors:
 Use the bundled script for deterministic generation from JSON:
 
 ```bash
-python3 scripts/build_chagee_timeline.py input.json output.xlsx
+python3 scripts/build_timeline.py input.json output.xlsx
 ```
 
 Input JSON shape:
