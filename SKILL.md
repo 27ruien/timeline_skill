@@ -1,13 +1,13 @@
 ---
 name: timeline-maker
-description: Create Kivisense-style Excel project timeline and Gantt workbooks from simple task lists. Use when Codex needs to turn items such as "事项名称, Kivisense, brand, start date, 10 workdays" into a polished `.xlsx` timeline with weekday date columns, month headers, owner checkmarks, incomplete default status, square-like colored Gantt cells, end-marker stars, and Kivisense branding.
+description: Create Kivisense-style Excel project timeline and Gantt workbooks from simple task lists. Use when Codex needs to turn items such as "事项名称, Kivisense, brand, start date, 10 workdays" into a polished `.xlsx` timeline with China-business-day date columns, month headers, owner checkmarks, incomplete default status, square-like colored Gantt cells, end-marker stars, and Kivisense branding.
 ---
 
 # Timeline Maker
 
 ## Overview
 
-Create a client-facing Excel timeline from sparse task inputs. Match the Kivisense timeline style: one `Timeline` sheet, Kivisense/弥知科技 logo in the top-left header area, wide task description column, owner check columns, incomplete-by-default status, horizontal weekday calendar, merged month headers, colored bars for task durations, and an end-marker star at each task's final Gantt day.
+Create a client-facing Excel timeline from sparse task inputs. Match the Kivisense timeline style: one `Timeline` sheet, Kivisense/弥知科技 logo in the top-left header area, wide task description column, owner check columns, incomplete-by-default status, horizontal China-business-day calendar, merged month headers, colored bars for task durations, and an end-marker star at each task's final Gantt day.
 
 When the user only provides content, infer the workbook structure and build the `.xlsx`; do not ask for extra fields unless the schedule cannot be inferred.
 
@@ -35,7 +35,7 @@ Rules:
 - If both are present, check both owner columns.
 - If no owner is present, leave both owner columns blank and continue.
 - `5天`, `5 days`, and `5 workdays` all mean 5 business days.
-- Durations are business days; skip Saturdays and Sundays.
+- Durations are China business days. Exclude Saturdays, Sundays, and Chinese public holidays, but include official adjusted working weekends when the holiday calendar marks them as workdays.
 - If a status is not explicitly provided, treat it as incomplete. In this visual style, leave `Status` blank rather than marking a completion check.
 - If the user requests literal status labels, use `未完成` for default incomplete instead of blank.
 - If `include_model` is enabled, treat the first field in each row as `Model`, group rows with the same model together even if they were entered non-adjacently, and merge the `Model` cells in the output.
@@ -52,7 +52,7 @@ Default to the 0528-style streamlined layout unless the user asks for batch/phas
 ```text
 A: optional Model or Description
 Next: Description, Kivisense, Brands, optional Status
-Then: weekday timeline
+Then: China-business-day timeline
 ```
 
 Header rows:
@@ -60,7 +60,7 @@ Header rows:
 - Row 1-4: logo, project title, and table headers must fit within these four rows.
 - Row 1-2: Kivisense/弥知科技 logo anchored within `A1:A2`, left padded and vertically centered like the reference screenshot. Project title merged across `B1:D2`, centered, and kept within 20 Chinese characters when possible. Widen `B:D` enough to hold the title cleanly.
 - Row 3: left headers and merged month headers.
-- Row 4: day numbers for each weekday date.
+- Row 4: day numbers for each China business-day date.
 - Row 5 onward: task rows.
 - When `Model` is enabled, group by first-seen model order, sort each model block by start date, and merge each model block vertically.
 
@@ -68,18 +68,18 @@ Freeze panes at the first date/data cell so owner columns remain visible.
 
 ## Timeline Rules
 
-Build date columns from the earliest task start to the latest computed task end, plus a small right-side buffer of about 5 business days. Use only weekdays unless the user explicitly asks for calendar days.
+Build date columns from the earliest task start to the latest computed task end, plus a small right-side buffer of about 5 China business days. Use only China business days unless the user explicitly asks for calendar days.
 
 For each task:
 
 1. Parse start date.
 2. Use explicit end date when provided; otherwise compute the end date by counting the start date as workday 1.
-3. Fill every weekday column between start and end inclusive.
+3. Fill every China business-day column between start and end inclusive.
 4. Insert the small star marker from `assets/gantt-end-star.png` in the final workday cell of each task's Gantt bar.
 5. Leave non-active timeline cells white.
 6. Do not mark the `Status` column complete unless the user explicitly says complete/done/已完成.
 
-If the start date falls on a weekend, move the Gantt bar start to the next Monday and keep the requested workday duration.
+If the start date is not a China business day, move the Gantt bar start to the next China business day and keep the requested workday duration.
 
 ## Visual Style
 
@@ -94,7 +94,7 @@ Match the Kivisense timeline style closely:
 - Borders: thin light grid across the active range.
 - Month headers: merged cells with centered month names.
 - Insert the Kivisense/弥知科技 logo from `assets/kivisense-logo.png` at the top-left of the sheet.
-- Insert the Gantt end star from `assets/gantt-end-star.png` at the final colored cell for every task. Example: a 10-workday task gets color across 10 weekday cells and the star anchored on the 10th cell. Make the star prominent, nearly filling the square-like date cell, and visually centered inside the cell.
+- Insert the Gantt end star from `assets/gantt-end-star.png` at the final colored cell for every task. Example: a 10-workday task gets color across 10 China business-day cells and the star anchored on the 10th cell. Make the star prominent, nearly filling the square-like date cell, and visually centered inside the cell.
 - Do not create a hidden pre-description column. `A3:A4` must be the `Description` header, and task names start in column `A`.
 - Use checkmark `√` for owners and completed status.
 

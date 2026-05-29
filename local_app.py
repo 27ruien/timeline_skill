@@ -29,41 +29,75 @@ INDEX_HTML = """<!doctype html>
   <title>项目排期工具</title>
   <style>
     :root {
-      --ink: #17212b;
-      --muted: #64748b;
-      --line: #d8e0e8;
-      --soft: #f7f9fb;
+      --ink: #111827;
+      --muted: #667085;
+      --line: #e5e7eb;
+      --soft: #f8fafc;
       --panel: #ffffff;
       --accent: #00b050;
       --accent-dark: #04733a;
       --danger: #b42318;
-      --danger-soft: #fee2e2;
+      --shadow: 0 1px 2px rgba(16, 24, 40, 0.05), 0 12px 28px rgba(16, 24, 40, 0.06);
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
       color: var(--ink);
-      background: #f3f6f8;
+      background: #f6f8fb;
     }
-    header {
-      height: 88px;
+    .topbar {
+      height: 76px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 24px;
-      padding: 0 32px;
-      background: var(--panel);
+      gap: 18px;
+      padding: 0 28px;
+      background: rgba(255, 255, 255, 0.94);
       border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(12px);
     }
-    header img {
+    .topbar-left {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+    .brand-logo {
       width: auto;
-      height: 58px;
-      max-width: 46vw;
+      height: 46px;
       object-fit: contain;
+      display: block;
+    }
+    .workspace-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .crumb {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+    }
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      height: 22px;
+      padding: 0 8px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: #334155;
+      background: #fff;
+      font-size: 12px;
+      font-weight: 700;
     }
     main {
-      padding: 24px 32px 32px;
+      padding: 22px 28px 30px;
     }
     .editor {
       min-height: calc(100vh - 144px);
@@ -72,12 +106,13 @@ INDEX_HTML = """<!doctype html>
       gap: 18px;
       background: var(--panel);
       border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 20px;
+      border-radius: 10px;
+      padding: 18px;
+      box-shadow: var(--shadow);
     }
     .toolbar {
       display: grid;
-      grid-template-columns: minmax(220px, 320px) auto 1fr;
+      grid-template-columns: minmax(220px, 340px) auto 1fr;
       align-items: end;
       gap: 18px;
     }
@@ -92,9 +127,9 @@ INDEX_HTML = """<!doctype html>
       width: 100%;
       height: 36px;
       border: 1px solid var(--line);
-      border-radius: 6px;
+      border-radius: 8px;
       color: var(--ink);
-      background: #fff;
+      background: #ffffff;
       font: inherit;
       padding: 7px 9px;
       outline: none;
@@ -123,38 +158,70 @@ INDEX_HTML = """<!doctype html>
       font-weight: 700;
       color: var(--ink);
     }
+    .check input {
+      border-radius: 4px;
+    }
     .primary, .secondary, .danger {
-      border: 0;
-      border-radius: 6px;
-      height: 36px;
-      padding: 0 14px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      height: 34px;
+      padding: 0 13px;
       font: inherit;
       font-weight: 750;
       cursor: pointer;
       white-space: nowrap;
     }
     .primary {
-      height: 40px;
-      padding: 0 18px;
+      height: 36px;
+      padding: 0 16px;
       color: #fff;
       background: var(--accent);
+      box-shadow: none;
     }
     .primary:hover { background: var(--accent-dark); }
     .secondary {
       color: var(--ink);
-      background: #e6edf3;
+      background: #fff;
+      border: 1px solid var(--line);
+    }
+    .secondary:hover {
+      background: #f9fafb;
+      border-color: #cbd5e1;
     }
     .danger {
-      width: 32px;
+      width: 30px;
+      height: 30px;
       padding: 0;
+      color: #98a2b3;
+      background: transparent;
+      border-color: transparent;
+      font-size: 18px;
+      line-height: 1;
+    }
+    .danger:hover {
       color: var(--danger);
-      background: var(--danger-soft);
+      background: #fff1f1;
+      border-color: #ffd5d5;
+    }
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .section-head label { margin-bottom: 0; }
+    .mini-note {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
     }
     .table-wrap {
       overflow-x: auto;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 10px;
       background: #fff;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
     }
     table {
       width: 100%;
@@ -167,25 +234,67 @@ INDEX_HTML = """<!doctype html>
       padding: 8px;
       vertical-align: middle;
     }
+    td { height: 50px; }
     th {
-      height: 38px;
-      background: var(--soft);
+      height: 36px;
+      background: #f9fbfd;
       color: var(--muted);
       font-size: 12px;
       text-align: left;
       font-weight: 800;
+      position: sticky;
+      top: 0;
+      z-index: 1;
     }
     tbody tr.dragging { opacity: 0.45; }
-    tbody tr:hover { background: #fbfdff; }
+    tbody tr:hover { background: #f8fbff; }
     td input, td select { height: 34px; }
     .col-drag { width: 44px; text-align: center; }
     .col-index { width: 46px; text-align: center; color: var(--muted); }
     .col-model { width: 140px; }
     .col-task { width: 290px; }
     .col-stakeholder { width: 190px; }
-    .col-date { width: 150px; }
+    .col-date { width: 138px; }
     .col-days { width: 116px; }
     .col-action { width: 58px; text-align: center; }
+    .date-field {
+      position: relative;
+      display: block;
+    }
+    .date-field input {
+      padding-right: 32px;
+      color: #1f2937;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0;
+    }
+    .date-field input::-webkit-calendar-picker-indicator {
+      opacity: 0;
+      cursor: pointer;
+    }
+    .date-field::after {
+      content: "";
+      position: absolute;
+      right: 11px;
+      top: 50%;
+      width: 13px;
+      height: 13px;
+      border: 1.6px solid #667085;
+      border-radius: 3px;
+      transform: translateY(-50%);
+      pointer-events: none;
+    }
+    .date-field::before {
+      content: "";
+      position: absolute;
+      right: 14px;
+      top: calc(50% - 7px);
+      width: 7px;
+      height: 2px;
+      border-top: 1.6px solid #667085;
+      border-bottom: 1.6px solid #667085;
+      pointer-events: none;
+      z-index: 1;
+    }
     .drag-handle {
       display: inline-flex;
       align-items: center;
@@ -216,7 +325,7 @@ INDEX_HTML = """<!doctype html>
       overflow: auto;
       border: 1px solid var(--line);
       border-radius: 6px;
-      background: var(--soft);
+      background: #fbfcfe;
       color: #334155;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-size: 12px;
@@ -228,36 +337,51 @@ INDEX_HTML = """<!doctype html>
     }
     .status.error { color: var(--danger); }
     @media (max-width: 860px) {
-      header { padding: 0 18px; }
+      .topbar { padding: 0 16px; }
       main { padding: 16px; }
+      .brand-logo { height: 38px; }
+      .workspace-meta { display: none; }
       .toolbar { grid-template-columns: 1fr; align-items: stretch; }
       .checks { padding-bottom: 0; }
     }
   </style>
 </head>
 <body>
-  <header>
-    <img src="/assets/kivisense-logo.png" alt="Kivisense">
-    <button class="primary" id="generateButton" type="button">生成排期</button>
-  </header>
-  <main>
-    <section class="editor">
-      <div class="toolbar">
-        <div>
-          <label for="projectName">项目标题</label>
-          <input id="projectName" maxlength="20" value="AR Campaign" autocomplete="off">
+  <div class="workspace">
+    <header class="topbar">
+      <div class="topbar-left">
+        <img class="brand-logo" src="/assets/kivisense-logo.png" alt="Kivisense">
+        <div class="workspace-meta">
+          <div class="crumb">Projects / 排期</div>
+          <div class="meta-row">
+            <span class="chip" id="taskCount">5 items</span>
+            <span class="chip">中国工作日</span>
+          </div>
         </div>
-        <div class="checks">
-          <label class="check"><input id="includeModel" type="checkbox"> Model</label>
-          <label class="check"><input id="includeStatus" type="checkbox" checked> Status</label>
-        </div>
-        <div class="status" id="status"></div>
       </div>
+      <button class="primary" id="generateButton" type="button">生成排期</button>
+    </header>
+    <main>
+      <section class="editor">
+        <div class="toolbar">
+          <div>
+            <label for="projectName">项目标题</label>
+            <input id="projectName" maxlength="20" value="AR Campaign" autocomplete="off">
+          </div>
+          <div class="checks">
+            <label class="check"><input id="includeModel" type="checkbox"> Model</label>
+            <label class="check"><input id="includeStatus" type="checkbox" checked> Status</label>
+          </div>
+          <div class="status" id="status"></div>
+        </div>
 
-      <div>
-        <label>事项清单</label>
-        <div class="table-wrap">
-          <table>
+        <div>
+          <div class="section-head">
+            <label>事项清单</label>
+            <span class="mini-note">2026 中国节假日</span>
+          </div>
+          <div class="table-wrap">
+            <table>
             <thead>
               <tr>
                 <th class="col-drag"></th>
@@ -272,22 +396,23 @@ INDEX_HTML = """<!doctype html>
               </tr>
             </thead>
             <tbody id="taskRows"></tbody>
-          </table>
+            </table>
+          </div>
         </div>
-      </div>
 
-      <div class="table-footer">
-        <button class="secondary" id="addTaskButton" type="button">新增事项</button>
-      </div>
+        <div class="table-footer">
+          <button class="secondary" id="addTaskButton" type="button">新增事项</button>
+        </div>
 
-      <div class="example">
-        示例
-        <pre>需求 | Project requirement | Kivisense | 2026-06-01 | 5 工作日 | 2026-06-05
-设计 | Creative Proposal | Kivisense + brand | 2026-06-08 | 10 工作日 | 2026-06-19
+        <div class="example">
+          示例
+          <pre>需求 | Project requirement | Kivisense | 2026-06-01 | 5 工作日 | 2026-06-05
+设计 | Creative Proposal | Kivisense + brand | 2026-06-08 | 10 工作日 | 2026-06-22
 需求 | Scope addendum | brand | 2026-06-18 | 4 工作日 | 2026-06-23</pre>
-      </div>
-    </section>
-  </main>
+        </div>
+      </section>
+    </main>
+  </div>
   <script>
     const taskRowsEl = document.getElementById("taskRows");
     const projectEl = document.getElementById("projectName");
@@ -295,6 +420,22 @@ INDEX_HTML = """<!doctype html>
     const includeStatusEl = document.getElementById("includeStatus");
     const statusEl = document.getElementById("status");
     const generateButton = document.getElementById("generateButton");
+    const taskCountEl = document.getElementById("taskCount");
+    const chinaPublicHolidays = new Set([
+      "2026-01-01", "2026-01-02", "2026-01-03",
+      "2026-02-15", "2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19", "2026-02-20", "2026-02-21", "2026-02-22", "2026-02-23",
+      "2026-04-04", "2026-04-05", "2026-04-06",
+      "2026-05-01", "2026-05-02", "2026-05-03", "2026-05-04", "2026-05-05",
+      "2026-06-19", "2026-06-20", "2026-06-21",
+      "2026-09-25", "2026-09-26", "2026-09-27",
+      "2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05", "2026-10-06", "2026-10-07"
+    ]);
+    const chinaAdjustedWorkdays = new Set([
+      "2026-01-04",
+      "2026-02-14", "2026-02-28",
+      "2026-05-09",
+      "2026-09-20", "2026-10-10"
+    ]);
 
     const standardRows = [
       { model: "", name: "Project requirement", stakeholder: "Kivisense", start: "2026-06-01", workdays: 5 },
@@ -324,33 +465,36 @@ INDEX_HTML = """<!doctype html>
       return `${year}-${month}-${day}`;
     }
 
-    function isWeekday(date) {
+    function isWorkday(date) {
+      const key = formatLocalDate(date);
+      if (chinaAdjustedWorkdays.has(key)) return true;
+      if (chinaPublicHolidays.has(key)) return false;
       const day = date.getDay();
       return day !== 0 && day !== 6;
     }
 
-    function nextWeekday(date) {
+    function nextWorkday(date) {
       const next = new Date(date);
-      while (!isWeekday(next)) next.setDate(next.getDate() + 1);
+      while (!isWorkday(next)) next.setDate(next.getDate() + 1);
       return next;
     }
 
     function addWorkdays(startValue, workdays) {
-      let current = nextWeekday(parseLocalDate(startValue));
+      let current = nextWorkday(parseLocalDate(startValue));
       let remaining = Number(workdays) - 1;
       while (remaining > 0) {
         current.setDate(current.getDate() + 1);
-        if (isWeekday(current)) remaining -= 1;
+        if (isWorkday(current)) remaining -= 1;
       }
       return formatLocalDate(current);
     }
 
     function countWorkdays(startValue, endValue) {
-      let current = nextWeekday(parseLocalDate(startValue));
-      const end = nextWeekday(parseLocalDate(endValue));
+      let current = nextWorkday(parseLocalDate(startValue));
+      const end = nextWorkday(parseLocalDate(endValue));
       let count = 0;
       while (current <= end) {
-        if (isWeekday(current)) count += 1;
+        if (isWorkday(current)) count += 1;
         current.setDate(current.getDate() + 1);
       }
       return count;
@@ -373,6 +517,7 @@ INDEX_HTML = """<!doctype html>
       [...taskRowsEl.children].forEach((row, index) => {
         row.querySelector(".col-index").textContent = index + 1;
       });
+      taskCountEl.textContent = `${taskRowsEl.children.length} items`;
     }
 
     function wireDateLogic(row) {
@@ -414,10 +559,10 @@ INDEX_HTML = """<!doctype html>
             <option value="Both">Kivisense + brand</option>
           </select>
         </td>
-        <td class="col-date"><input data-field="start" type="date" autocomplete="off"></td>
+        <td class="col-date"><span class="date-field"><input data-field="start" type="date" autocomplete="off"></span></td>
         <td class="col-days"><input data-field="workdays" type="number" min="1" step="1" placeholder="5" autocomplete="off"></td>
-        <td class="col-date"><input data-field="end" type="date" autocomplete="off"></td>
-        <td class="col-action"><button class="danger" type="button" title="删除">×</button></td>
+        <td class="col-date"><span class="date-field"><input data-field="end" type="date" autocomplete="off"></span></td>
+        <td class="col-action"><button class="danger" type="button" title="删除" aria-label="删除">×</button></td>
       `;
       taskRowsEl.appendChild(row);
       row.querySelector('[data-field="model"]').value = task.model || "";
@@ -678,7 +823,7 @@ def run_self_test() -> Path:
         "include_status": False,
         "tasks": [
             {"model": "需求", "name": "Project requirement", "owners": ["Kivisense"], "start": "2026-06-01", "workdays": 5},
-            {"model": "设计", "name": "Creative Proposal", "owners": ["Kivisense", "Brands"], "start": "2026-06-08", "end": "2026-06-19"},
+            {"model": "设计", "name": "Creative Proposal", "owners": ["Kivisense", "Brands"], "start": "2026-06-08", "end": "2026-06-22"},
             {"model": "需求", "name": "Scope addendum", "owners": ["Brands"], "start": "2026-06-18", "workdays": 4},
         ],
     }

@@ -34,6 +34,22 @@ CATEGORY_COLORS = {
     "launch": ["00B050", "7030A0", "5B9BD5"],
     "default": ["A9D08E", "F8CBAD", "5B9BD5"],
 }
+CHINA_PUBLIC_HOLIDAYS = {
+    # 2026 China public holiday and adjusted-workday calendar.
+    "2026-01-01", "2026-01-02", "2026-01-03",
+    "2026-02-15", "2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19", "2026-02-20", "2026-02-21", "2026-02-22", "2026-02-23",
+    "2026-04-04", "2026-04-05", "2026-04-06",
+    "2026-05-01", "2026-05-02", "2026-05-03", "2026-05-04", "2026-05-05",
+    "2026-06-19", "2026-06-20", "2026-06-21",
+    "2026-09-25", "2026-09-26", "2026-09-27",
+    "2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05", "2026-10-06", "2026-10-07",
+}
+CHINA_ADJUSTED_WORKDAYS = {
+    "2026-01-04",
+    "2026-02-14", "2026-02-28",
+    "2026-05-09",
+    "2026-09-20", "2026-10-10",
+}
 
 
 def parse_date(value: str) -> date:
@@ -48,12 +64,21 @@ def parse_date(value: str) -> date:
     raise ValueError(f"Unsupported date format: {value!r}")
 
 
-def is_weekday(day: date) -> bool:
+def date_key(day: date) -> str:
+    return day.isoformat()
+
+
+def is_workday(day: date) -> bool:
+    key = date_key(day)
+    if key in CHINA_ADJUSTED_WORKDAYS:
+        return True
+    if key in CHINA_PUBLIC_HOLIDAYS:
+        return False
     return day.weekday() < 5
 
 
-def next_weekday(day: date) -> date:
-    while not is_weekday(day):
+def next_workday(day: date) -> date:
+    while not is_workday(day):
         day += timedelta(days=1)
     return day
 
@@ -61,27 +86,27 @@ def next_weekday(day: date) -> date:
 def add_workdays(start: date, workdays: int) -> date:
     if workdays < 1:
         raise ValueError("workdays must be >= 1")
-    current = next_weekday(start)
+    current = next_workday(start)
     remaining = workdays - 1
     while remaining:
         current += timedelta(days=1)
-        if is_weekday(current):
+        if is_workday(current):
             remaining -= 1
     return current
 
 
-def weekday_range(start: date, end: date) -> list[date]:
+def workday_range(start: date, end: date) -> list[date]:
     days = []
     current = start
     while current <= end:
-        if is_weekday(current):
+        if is_workday(current):
             days.append(current)
         current += timedelta(days=1)
     return days
 
 
 def count_workdays(start: date, end: date) -> int:
-    return len(weekday_range(start, end))
+    return len(workday_range(start, end))
 
 
 def normalize_owners(owners) -> set[str]:
@@ -166,12 +191,12 @@ def normalize_tasks(raw_tasks: list[dict]) -> list[dict]:
         if not name:
             raise ValueError(f"Task #{index} is missing a name")
         start = parse_date(raw.get("start") or raw.get("start_date") or raw.get("开始日期"))
-        start = next_weekday(start)
+        start = next_workday(start)
         end_value = raw.get("end") or raw.get("end_date") or raw.get("结束日期")
         workdays_value = raw.get("workdays") or raw.get("duration") or raw.get("天数") or raw.get("工作日")
         workdays_match = re.search(r"\d+", str(workdays_value)) if workdays_value is not None else None
         if end_value:
-            end = next_weekday(parse_date(end_value))
+            end = next_workday(parse_date(end_value))
             if end < start:
                 raise ValueError(f"Task #{index} end date is before start date")
             workdays = count_workdays(start, end)
@@ -229,7 +254,7 @@ def build_workbook(config: dict) -> Workbook:
     min_start = min(task["start"] for task in tasks)
     max_end = max(task["end"] for task in tasks)
     buffer_end = add_workdays(max_end + timedelta(days=1), int(config.get("buffer_workdays", 5)))
-    days = weekday_range(min_start, buffer_end)
+    days = workday_range(min_start, buffer_end)
 
     wb = Workbook()
     ws = wb.active
@@ -326,7 +351,7 @@ def build_workbook(config: dict) -> Workbook:
                 ws.cell(row_offset, column_index["Status"]).value = "未完成"
 
         fill = PatternFill("solid", fgColor=task["bar_color"])
-        for day in weekday_range(task["start"], task["end"]):
+        for day in workday_range(task["start"], task["end"]):
             col = day_to_col.get(day)
             if col:
                 ws.cell(row_offset, col).fill = fill

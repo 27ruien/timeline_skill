@@ -59,8 +59,9 @@ If `include_status` is false, omit the Status column entirely.
 
 - `10天`, `10 day`, `10 days`, `10 workdays`, `10个工作日` -> `10`
 - Treat durations as business days by default.
-- Count the start date as day 1 if it is a weekday.
-- If start date is Saturday or Sunday, move start to the next Monday.
+- Count the start date as day 1 if it is a China business day.
+- China business days exclude Saturdays, Sundays, and Chinese public holidays, but include official adjusted working weekends.
+- If start date is not a China business day, move start to the next China business day.
 - If an explicit end date is provided, use it for the Gantt range and derive workday count.
 - If no end date is provided, derive the end date from workday duration.
 
