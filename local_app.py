@@ -42,13 +42,13 @@ INDEX_HTML = """<!doctype html>
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      font-family: "Google Sans Text", -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
       color: var(--ink);
       background: #f6f8fb;
       padding-bottom: 112px;
     }
     .topbar {
-      height: 70px;
+      height: 92px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -63,10 +63,11 @@ INDEX_HTML = """<!doctype html>
       display: flex;
       align-items: center;
       gap: 18px;
+      flex: 0 0 auto;
     }
     .brand-logo {
       width: auto;
-      height: 46px;
+      height: 58px;
       object-fit: contain;
       display: block;
     }
@@ -76,7 +77,7 @@ INDEX_HTML = """<!doctype html>
     .example-panel {
       width: fit-content;
       max-width: 100%;
-      margin-bottom: 16px;
+      margin-left: auto;
       display: flex;
       align-items: center;
       gap: 10px;
@@ -126,20 +127,24 @@ INDEX_HTML = """<!doctype html>
       color: var(--muted);
       font-variant-numeric: tabular-nums;
     }
-    .editor {
-      min-height: calc(100vh - 250px);
-      display: flex;
-      flex-direction: column;
-      gap: 18px;
+    .project-panel,
+    .task-panel {
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 10px;
-      padding: 18px;
       box-shadow: var(--shadow);
+    }
+    .project-panel {
+      width: min(860px, 100%);
+      margin-bottom: 16px;
+      padding: 16px 20px;
+    }
+    .task-panel {
+      padding: 18px;
     }
     .toolbar {
       display: grid;
-      grid-template-columns: minmax(220px, 340px) auto 1fr;
+      grid-template-columns: minmax(240px, 490px) auto 1fr;
       align-items: end;
       gap: 18px;
     }
@@ -160,6 +165,14 @@ INDEX_HTML = """<!doctype html>
       font: inherit;
       padding: 7px 9px;
       outline: none;
+    }
+    select {
+      appearance: none;
+      padding-right: 34px;
+      background-image: url("data:image/svg+xml,%3Csvg width='14' height='14' viewBox='0 0 14 14' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3.5 5.25L7 8.75L10.5 5.25' stroke='%23334155' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-position: right 13px center;
+      background-repeat: no-repeat;
+      background-size: 14px 14px;
     }
     input:focus, select:focus {
       border-color: var(--accent);
@@ -276,6 +289,7 @@ INDEX_HTML = """<!doctype html>
     .col-model { width: 140px; }
     .col-task { width: 290px; }
     .col-stakeholder { width: 190px; }
+    .col-status { width: 116px; }
     .col-range { width: 270px; }
     .col-days { width: 116px; }
     .col-action { width: 58px; text-align: center; }
@@ -373,6 +387,48 @@ INDEX_HTML = """<!doctype html>
     .floating-actions .secondary:hover {
       background: rgba(255, 255, 255, 0.78);
     }
+    .toast {
+      position: fixed;
+      top: 18px;
+      left: 50%;
+      z-index: 40;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 230px;
+      height: 52px;
+      padding: 0 22px;
+      border: 1px solid rgba(226, 232, 240, 0.92);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 16px 38px rgba(15, 23, 42, 0.13);
+      color: #0f172a;
+      font-size: 16px;
+      font-weight: 720;
+      pointer-events: none;
+      opacity: 0;
+      transform: translate(-50%, -10px);
+      transition: opacity 180ms ease, transform 180ms ease;
+      backdrop-filter: blur(18px);
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+    .toast-icon {
+      width: 22px;
+      height: 22px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      color: #fff;
+      background: var(--accent);
+      font-size: 14px;
+      font-weight: 800;
+      line-height: 1;
+      box-shadow: 0 6px 14px rgba(0, 176, 80, 0.18);
+    }
     .add-icon {
       display: inline-block;
       margin-right: 6px;
@@ -408,7 +464,7 @@ INDEX_HTML = """<!doctype html>
     @media (max-width: 860px) {
       .topbar { padding: 0 16px; }
       main { padding: 16px; }
-      .brand-logo { height: 38px; }
+      .brand-logo { height: 44px; }
       .example-panel { align-items: flex-start; flex-direction: column; }
       .example-item { height: auto; min-height: 30px; white-space: normal; }
       .toolbar { grid-template-columns: 1fr; align-items: stretch; }
@@ -428,8 +484,6 @@ INDEX_HTML = """<!doctype html>
       <div class="topbar-left">
         <img class="brand-logo" src="/assets/kivisense-logo.png" alt="Kivisense">
       </div>
-    </header>
-    <main>
       <section class="example-panel">
         <div class="example-title">示例</div>
         <div class="example-list">
@@ -449,7 +503,9 @@ INDEX_HTML = """<!doctype html>
           </div>
         </div>
       </section>
-      <section class="editor">
+    </header>
+    <main>
+      <section class="project-panel">
         <div class="toolbar">
           <div>
             <label for="projectName">项目标题</label>
@@ -461,7 +517,9 @@ INDEX_HTML = """<!doctype html>
           </div>
           <div class="status" id="status"></div>
         </div>
+      </section>
 
+      <section class="task-panel">
         <div>
           <div class="section-head">
             <label>事项清单</label>
@@ -475,6 +533,7 @@ INDEX_HTML = """<!doctype html>
                 <th class="col-model" data-model-col>Model</th>
                 <th class="col-task">事项名称</th>
                 <th class="col-stakeholder">相关方</th>
+                <th class="col-status" data-status-col>Status</th>
                 <th class="col-range">日期范围</th>
                 <th class="col-days">工作日</th>
                 <th class="col-action"></th>
@@ -484,12 +543,15 @@ INDEX_HTML = """<!doctype html>
             </table>
           </div>
         </div>
-
       </section>
     </main>
     <div class="floating-actions">
       <button class="secondary" id="addTaskButton" type="button"><span class="add-icon">+</span>新增</button>
       <button class="primary" id="generateButton" type="button">生成</button>
+    </div>
+    <div class="toast" id="successToast" role="status" aria-live="polite">
+      <span class="toast-icon">✓</span>
+      <span class="toast-text">操作成功</span>
     </div>
   </div>
   <script>
@@ -499,6 +561,8 @@ INDEX_HTML = """<!doctype html>
     const includeStatusEl = document.getElementById("includeStatus");
     const statusEl = document.getElementById("status");
     const generateButton = document.getElementById("generateButton");
+    const successToast = document.getElementById("successToast");
+    let toastTimer = null;
     const chinaPublicHolidays = new Set([
       "2026-01-01", "2026-01-02", "2026-01-03",
       "2026-02-15", "2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19", "2026-02-20", "2026-02-21", "2026-02-22", "2026-02-23",
@@ -585,9 +649,24 @@ INDEX_HTML = """<!doctype html>
       return [];
     }
 
+    function showSuccessToast(message = "操作成功") {
+      successToast.querySelector(".toast-text").textContent = message;
+      successToast.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        successToast.classList.remove("show");
+      }, 2000);
+    }
+
     function syncModelVisibility() {
       document.querySelectorAll("[data-model-col]").forEach((el) => {
         el.style.display = includeModelEl.checked ? "" : "none";
+      });
+    }
+
+    function syncStatusVisibility() {
+      document.querySelectorAll("[data-status-col]").forEach((el) => {
+        el.style.display = includeStatusEl.checked ? "" : "none";
       });
     }
 
@@ -636,6 +715,12 @@ INDEX_HTML = """<!doctype html>
             <option value="Both">Kivisense + brand</option>
           </select>
         </td>
+        <td class="col-status" data-status-col>
+          <select data-field="status">
+            <option value="incomplete">未完成</option>
+            <option value="done">已完成</option>
+          </select>
+        </td>
         <td class="col-range">
           <span class="range-field">
             <input data-field="start" type="date" autocomplete="off" aria-label="开始日期">
@@ -650,6 +735,7 @@ INDEX_HTML = """<!doctype html>
       row.querySelector('[data-field="model"]').value = task.model || "";
       row.querySelector('[data-field="name"]').value = task.name || "";
       row.querySelector('[data-field="stakeholder"]').value = task.stakeholder || "";
+      row.querySelector('[data-field="status"]').value = task.status || "incomplete";
       row.querySelector('[data-field="start"]').value = task.start || "";
       row.querySelector('[data-field="workdays"]').value = task.workdays || "";
       if (task.end) row.querySelector('[data-field="end"]').value = task.end;
@@ -675,6 +761,7 @@ INDEX_HTML = """<!doctype html>
         taskRowsEl.insertBefore(dragging, after ? row.nextSibling : row);
       });
       syncModelVisibility();
+      syncStatusVisibility();
       renumberRows();
     }
 
@@ -688,6 +775,7 @@ INDEX_HTML = """<!doctype html>
         const model = row.querySelector('[data-field="model"]').value.trim();
         const name = row.querySelector('[data-field="name"]').value.trim();
         const stakeholder = row.querySelector('[data-field="stakeholder"]').value;
+        const status = row.querySelector('[data-field="status"]').value;
         const start = row.querySelector('[data-field="start"]').value;
         const workdays = Number(row.querySelector('[data-field="workdays"]').value);
         const end = row.querySelector('[data-field="end"]').value;
@@ -702,6 +790,7 @@ INDEX_HTML = """<!doctype html>
           model,
           name,
           owners: stakeholderToList(stakeholder),
+          status: includeStatusEl.checked ? status : "incomplete",
           start,
           end,
           workdays: Number.isInteger(workdays) && workdays > 0 ? workdays : undefined
@@ -713,8 +802,8 @@ INDEX_HTML = """<!doctype html>
 
     includeModelEl.addEventListener("change", () => {
       syncModelVisibility();
-      if (includeModelEl.checked) fillRows(modelRows);
     });
+    includeStatusEl.addEventListener("change", syncStatusVisibility);
     document.getElementById("addTaskButton").addEventListener("click", () => addRow());
 
     async function generate() {
@@ -747,7 +836,8 @@ INDEX_HTML = """<!doctype html>
         a.click();
         a.remove();
         URL.revokeObjectURL(url);
-        statusEl.textContent = "已生成";
+        statusEl.textContent = "";
+        showSuccessToast("操作成功");
       } catch (error) {
         statusEl.textContent = error.message;
         statusEl.className = "status error";
@@ -759,9 +849,10 @@ INDEX_HTML = """<!doctype html>
     generateButton.addEventListener("click", generate);
     fillRows(standardRows);
     syncModelVisibility();
+    syncStatusVisibility();
     window.addEventListener("pageshow", () => {
-      fillRows(includeModelEl.checked ? modelRows : standardRows);
       syncModelVisibility();
+      syncStatusVisibility();
     });
   </script>
 </body>
