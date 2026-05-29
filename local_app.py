@@ -45,9 +45,10 @@ INDEX_HTML = """<!doctype html>
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
       color: var(--ink);
       background: #f6f8fb;
+      padding-bottom: 112px;
     }
     .topbar {
-      height: 76px;
+      height: 70px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -69,38 +70,64 @@ INDEX_HTML = """<!doctype html>
       object-fit: contain;
       display: block;
     }
-    .workspace-meta {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
+    main {
+      padding: 22px 28px 30px;
     }
-    .crumb {
-      color: var(--muted);
+    .example-panel {
+      width: fit-content;
+      max-width: 100%;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid #e7edf5;
+      border-radius: 12px;
+      padding: 7px;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+    }
+    .example-title {
+      flex: 0 0 auto;
+      height: 28px;
+      display: inline-flex;
+      align-items: center;
+      border-radius: 8px;
+      background: #f3f7fb;
+      padding: 0 9px;
+      color: #53657c;
       font-size: 12px;
       font-weight: 750;
     }
-    .meta-row {
+    .example-list {
+      min-width: 0;
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
     }
-    .chip {
+    .example-item {
       display: inline-flex;
       align-items: center;
-      height: 22px;
-      padding: 0 8px;
-      border: 1px solid var(--line);
-      border-radius: 999px;
+      gap: 7px;
+      max-width: 100%;
+      height: 28px;
+      padding: 0 9px;
+      border: 1px solid #edf1f5;
+      border-radius: 8px;
+      background: #fbfcfe;
       color: #334155;
-      background: #fff;
       font-size: 12px;
-      font-weight: 700;
+      white-space: nowrap;
     }
-    main {
-      padding: 22px 28px 30px;
+    .example-model {
+      color: #04733a;
+      font-weight: 750;
+    }
+    .example-date {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
     }
     .editor {
-      min-height: calc(100vh - 144px);
+      min-height: calc(100vh - 250px);
       display: flex;
       flex-direction: column;
       gap: 18px;
@@ -211,11 +238,6 @@ INDEX_HTML = """<!doctype html>
       margin-bottom: 8px;
     }
     .section-head label { margin-bottom: 0; }
-    .mini-note {
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 650;
-    }
     .table-wrap {
       overflow-x: auto;
       border: 1px solid var(--line);
@@ -254,46 +276,40 @@ INDEX_HTML = """<!doctype html>
     .col-model { width: 140px; }
     .col-task { width: 290px; }
     .col-stakeholder { width: 190px; }
-    .col-date { width: 138px; }
+    .col-range { width: 270px; }
     .col-days { width: 116px; }
     .col-action { width: 58px; text-align: center; }
-    .date-field {
-      position: relative;
-      display: block;
+    .range-field {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr);
+      align-items: center;
+      height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      overflow: hidden;
     }
-    .date-field input {
-      padding-right: 32px;
+    .range-field:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(0, 176, 80, 0.12);
+    }
+    .range-field input {
+      height: 32px;
+      border: 0;
+      border-radius: 0;
+      padding: 6px 8px;
       color: #1f2937;
+      background: transparent;
       font-variant-numeric: tabular-nums;
       letter-spacing: 0;
     }
-    .date-field input::-webkit-calendar-picker-indicator {
-      opacity: 0;
-      cursor: pointer;
+    .range-field input:focus {
+      box-shadow: none;
     }
-    .date-field::after {
-      content: "";
-      position: absolute;
-      right: 11px;
-      top: 50%;
-      width: 13px;
-      height: 13px;
-      border: 1.6px solid #667085;
-      border-radius: 3px;
-      transform: translateY(-50%);
-      pointer-events: none;
-    }
-    .date-field::before {
-      content: "";
-      position: absolute;
-      right: 14px;
-      top: calc(50% - 7px);
-      width: 7px;
-      height: 2px;
-      border-top: 1.6px solid #667085;
-      border-bottom: 1.6px solid #667085;
-      pointer-events: none;
-      z-index: 1;
+    .range-sep {
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
     }
     .drag-handle {
       display: inline-flex;
@@ -307,12 +323,65 @@ INDEX_HTML = """<!doctype html>
       user-select: none;
     }
     .drag-handle:active { cursor: grabbing; }
-    .table-footer {
+    .floating-actions {
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+      z-index: 20;
       display: flex;
-      justify-content: flex-end;
-      margin-top: -6px;
+      align-items: center;
+      gap: 12px;
+      padding: 5px 6px;
+      border: 1px solid rgba(203, 213, 225, 0.72);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.62);
+      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.12);
+      backdrop-filter: blur(20px);
+      transform: translateX(-50%);
+    }
+    .floating-actions::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86);
+    }
+    .floating-actions .primary,
+    .floating-actions .secondary {
+      position: relative;
+      min-width: 112px;
+      height: 32px;
+      padding: 0 20px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 560;
+    }
+    .floating-actions .primary {
+      min-width: 118px;
+      background: rgba(0, 176, 80, 0.86);
+      box-shadow: 0 6px 16px rgba(0, 176, 80, 0.12);
+    }
+    .floating-actions .primary:hover {
+      background: rgba(0, 146, 67, 0.9);
+    }
+    .floating-actions .secondary {
+      border-color: rgba(203, 213, 225, 0.72);
+      background: rgba(255, 255, 255, 0.54);
+      color: #172033;
+    }
+    .floating-actions .secondary:hover {
+      background: rgba(255, 255, 255, 0.78);
+    }
+    .add-icon {
+      display: inline-block;
+      margin-right: 6px;
+      font-size: 14px;
+      line-height: 0;
+      transform: translateY(0);
     }
     .example {
+      display: none;
       margin-top: auto;
       max-width: 680px;
       color: var(--muted);
@@ -340,9 +409,16 @@ INDEX_HTML = """<!doctype html>
       .topbar { padding: 0 16px; }
       main { padding: 16px; }
       .brand-logo { height: 38px; }
-      .workspace-meta { display: none; }
+      .example-panel { align-items: flex-start; flex-direction: column; }
+      .example-item { height: auto; min-height: 30px; white-space: normal; }
       .toolbar { grid-template-columns: 1fr; align-items: stretch; }
       .checks { padding-bottom: 0; }
+      .floating-actions {
+        left: 16px;
+        right: 16px;
+        justify-content: space-between;
+        transform: none;
+      }
     }
   </style>
 </head>
@@ -351,17 +427,28 @@ INDEX_HTML = """<!doctype html>
     <header class="topbar">
       <div class="topbar-left">
         <img class="brand-logo" src="/assets/kivisense-logo.png" alt="Kivisense">
-        <div class="workspace-meta">
-          <div class="crumb">Projects / 排期</div>
-          <div class="meta-row">
-            <span class="chip" id="taskCount">5 items</span>
-            <span class="chip">中国工作日</span>
-          </div>
-        </div>
       </div>
-      <button class="primary" id="generateButton" type="button">生成排期</button>
     </header>
     <main>
+      <section class="example-panel">
+        <div class="example-title">示例</div>
+        <div class="example-list">
+          <div class="example-item">
+            <span class="example-model">需求</span>
+            <span>Project requirement</span>
+            <span>Kivisense</span>
+            <span class="example-date">2026-06-01 - 2026-06-05</span>
+            <span>5 工作日</span>
+          </div>
+          <div class="example-item">
+            <span class="example-model">设计</span>
+            <span>Creative Proposal</span>
+            <span>Kivisense + brand</span>
+            <span class="example-date">2026-06-08 - 2026-06-22</span>
+            <span>10 工作日</span>
+          </div>
+        </div>
+      </section>
       <section class="editor">
         <div class="toolbar">
           <div>
@@ -378,7 +465,6 @@ INDEX_HTML = """<!doctype html>
         <div>
           <div class="section-head">
             <label>事项清单</label>
-            <span class="mini-note">2026 中国节假日</span>
           </div>
           <div class="table-wrap">
             <table>
@@ -389,9 +475,8 @@ INDEX_HTML = """<!doctype html>
                 <th class="col-model" data-model-col>Model</th>
                 <th class="col-task">事项名称</th>
                 <th class="col-stakeholder">相关方</th>
-                <th class="col-date">开始日期</th>
+                <th class="col-range">日期范围</th>
                 <th class="col-days">工作日</th>
-                <th class="col-date">结束日期</th>
                 <th class="col-action"></th>
               </tr>
             </thead>
@@ -400,18 +485,12 @@ INDEX_HTML = """<!doctype html>
           </div>
         </div>
 
-        <div class="table-footer">
-          <button class="secondary" id="addTaskButton" type="button">新增事项</button>
-        </div>
-
-        <div class="example">
-          示例
-          <pre>需求 | Project requirement | Kivisense | 2026-06-01 | 5 工作日 | 2026-06-05
-设计 | Creative Proposal | Kivisense + brand | 2026-06-08 | 10 工作日 | 2026-06-22
-需求 | Scope addendum | brand | 2026-06-18 | 4 工作日 | 2026-06-23</pre>
-        </div>
       </section>
     </main>
+    <div class="floating-actions">
+      <button class="secondary" id="addTaskButton" type="button"><span class="add-icon">+</span>新增</button>
+      <button class="primary" id="generateButton" type="button">生成</button>
+    </div>
   </div>
   <script>
     const taskRowsEl = document.getElementById("taskRows");
@@ -420,7 +499,6 @@ INDEX_HTML = """<!doctype html>
     const includeStatusEl = document.getElementById("includeStatus");
     const statusEl = document.getElementById("status");
     const generateButton = document.getElementById("generateButton");
-    const taskCountEl = document.getElementById("taskCount");
     const chinaPublicHolidays = new Set([
       "2026-01-01", "2026-01-02", "2026-01-03",
       "2026-02-15", "2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19", "2026-02-20", "2026-02-21", "2026-02-22", "2026-02-23",
@@ -517,7 +595,6 @@ INDEX_HTML = """<!doctype html>
       [...taskRowsEl.children].forEach((row, index) => {
         row.querySelector(".col-index").textContent = index + 1;
       });
-      taskCountEl.textContent = `${taskRowsEl.children.length} items`;
     }
 
     function wireDateLogic(row) {
@@ -559,9 +636,14 @@ INDEX_HTML = """<!doctype html>
             <option value="Both">Kivisense + brand</option>
           </select>
         </td>
-        <td class="col-date"><span class="date-field"><input data-field="start" type="date" autocomplete="off"></span></td>
+        <td class="col-range">
+          <span class="range-field">
+            <input data-field="start" type="date" autocomplete="off" aria-label="开始日期">
+            <span class="range-sep">至</span>
+            <input data-field="end" type="date" autocomplete="off" aria-label="结束日期">
+          </span>
+        </td>
         <td class="col-days"><input data-field="workdays" type="number" min="1" step="1" placeholder="5" autocomplete="off"></td>
-        <td class="col-date"><span class="date-field"><input data-field="end" type="date" autocomplete="off"></span></td>
         <td class="col-action"><button class="danger" type="button" title="删除" aria-label="删除">×</button></td>
       `;
       taskRowsEl.appendChild(row);
