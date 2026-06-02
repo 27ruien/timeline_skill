@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import tempfile
 import webbrowser
@@ -19,6 +20,39 @@ from scripts.build_timeline import build_workbook
 
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
+
+
+def normalize_base_path(value: str) -> str:
+    base = value.strip().rstrip("/")
+    if base and not base.startswith("/"):
+        base = "/" + base
+    return base
+
+
+BASE_PATH = normalize_base_path(os.environ.get("BASE_PATH", ""))
+
+
+def with_base(path: str) -> str:
+    if not path.startswith("/"):
+        path = "/" + path
+    if not BASE_PATH:
+        return path
+    return BASE_PATH + path
+
+
+def strip_base_path(path: str) -> str:
+    if BASE_PATH and path.startswith(BASE_PATH + "/"):
+        stripped = path[len(BASE_PATH) :]
+        return stripped or "/"
+    return path
+
+
+def render_index_html() -> str:
+    return (
+        INDEX_HTML
+        .replace("__BASE_PATH_JSON__", json.dumps(BASE_PATH))
+        .replace("__LOGO_SRC__", with_base("/assets/kivisense-logo.png"))
+    )
 
 
 INDEX_HTML = """<!doctype html>
@@ -595,7 +629,7 @@ INDEX_HTML = """<!doctype html>
   <div class="workspace">
     <header class="topbar">
       <div class="topbar-left">
-        <img class="brand-logo" src="/assets/kivisense-logo.png" alt="Kivisense">
+        <img class="brand-logo" src="__LOGO_SRC__" alt="Kivisense">
       </div>
       <section class="example-panel">
         <div class="example-title">Example</div>
@@ -677,6 +711,7 @@ INDEX_HTML = """<!doctype html>
     </div>
   </div>
   <script>
+    window.BASE_PATH = __BASE_PATH_JSON__;
     const taskRowsEl = document.getElementById("taskRows");
     const projectEl = document.getElementById("projectName");
     const includeModelEl = document.getElementById("includeModel");
@@ -715,6 +750,12 @@ INDEX_HTML = """<!doctype html>
       { model: "需求", name: "Scope addendum", stakeholder: "Brands", start: "2026-06-18", workdays: 4 },
       { model: "上线", name: "Launch online", stakeholder: "Both", start: "2026-06-30", workdays: 1 }
     ];
+
+    function appPath(path) {
+      const base = window.BASE_PATH || "";
+      const normalized = path.startsWith("/") ? path : `/${path}`;
+      return `${base}${normalized}`;
+    }
 
     function parseLocalDate(value) {
       if (!value) return null;
@@ -995,7 +1036,7 @@ INDEX_HTML = """<!doctype html>
       statusEl.className = "status";
       try {
         const tasks = collectRows();
-        const response = await fetch("/generate", {
+        const response = await fetch(appPath("/generate"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -1100,18 +1141,31 @@ class TimelineRequestHandler(BaseHTTPRequestHandler):
     server_version = "TimelineMaker/1.0"
 
     def do_GET(self) -> None:
+        self.handle_get_like_request(write_body=True)
+
+    def do_HEAD(self) -> None:
+        self.handle_get_like_request(write_body=False)
+
+    def handle_get_like_request(self, write_body: bool) -> None:
         parsed = urlparse(self.path)
-        if parsed.path == "/":
-            self.respond_text(INDEX_HTML, "text/html; charset=utf-8")
+        if BASE_PATH and parsed.path == BASE_PATH:
+            location = with_base("/") + (f"?{parsed.query}" if parsed.query else "")
+            self.respond_redirect(location)
             return
-        if parsed.path == "/assets/kivisense-logo.png":
-            self.respond_file(Path(__file__).parent / "assets" / "kivisense-logo.png", "image/png")
+
+        path = strip_base_path(parsed.path)
+        if path == "/":
+            self.respond_text(render_index_html(), "text/html; charset=utf-8", write_body=write_body)
+            return
+        if path == "/assets/kivisense-logo.png":
+            self.respond_file(Path(__file__).parent / "assets" / "kivisense-logo.png", "image/png", write_body=write_body)
             return
         self.send_error(404)
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
-        if parsed.path != "/generate":
+        path = strip_base_path(parsed.path)
+        if path != "/generate":
             self.send_error(404)
             return
         try:
@@ -1141,13 +1195,19 @@ class TimelineRequestHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             self.respond_json({"error": str(exc)}, status=400)
 
-    def respond_text(self, text: str, content_type: str) -> None:
+    def respond_text(self, text: str, content_type: str, write_body: bool = True) -> None:
         body = text.encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        if write_body:
+            self.wfile.write(body)
+
+    def respond_redirect(self, location: str, status: int = 301) -> None:
+        self.send_response(status)
+        self.send_header("Location", location)
+        self.end_headers()
 
     def respond_json(self, payload: dict, status: int = 200) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -1157,7 +1217,7 @@ class TimelineRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def respond_file(self, path: Path, content_type: str) -> None:
+    def respond_file(self, path: Path, content_type: str, write_body: bool = True) -> None:
         if not path.exists():
             self.send_error(404)
             return
@@ -1166,7 +1226,8 @@ class TimelineRequestHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        if write_body:
+            self.wfile.write(body)
 
     def log_message(self, format: str, *args) -> None:
         return
@@ -1202,8 +1263,10 @@ def main() -> int:
         return 0
 
     server = ThreadingHTTPServer((HOST, args.port), TimelineRequestHandler)
-    url = f"http://{HOST}:{args.port}"
+    url = f"http://{HOST}:{args.port}{with_base('/')}"
     print(f"Timeline Maker is running: {url}")
+    if BASE_PATH:
+        print(f"BASE_PATH is set to: {BASE_PATH}")
     if not args.no_browser:
         webbrowser.open(url)
     try:

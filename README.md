@@ -101,6 +101,100 @@ $timeline-maker
 
 来触发这个 skill。
 
+## 部署到 Nginx 子路径
+
+服务支持通过 `BASE_PATH` 部署到子路径，例如外部访问：
+
+```text
+https://gridworks.cn/tool/timeline
+https://gridworks.cn/tool/timeline/
+```
+
+启动服务时设置：
+
+```bash
+BASE_PATH=/tool/timeline python3 local_app.py --no-browser
+```
+
+本地开发不设置 `BASE_PATH`，仍然访问：
+
+```text
+http://127.0.0.1:8765/
+```
+
+### systemd 示例
+
+将路径按服务器实际目录调整：
+
+```ini
+[Unit]
+Description=Timeline Maker
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/timeline_skill
+Environment=BASE_PATH=/tool/timeline
+ExecStart=/usr/bin/python3 /opt/timeline_skill/local_app.py --no-browser
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+```
+
+启用：
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now timeline-maker
+sudo systemctl status timeline-maker
+```
+
+### Nginx 示例
+
+推荐保留尾斜杠的 `proxy_pass`，让 Nginx 把 `/tool/timeline/` 转发到后端 `/`，同时应用仍会在页面里生成带 `/tool/timeline` 的资源和接口路径。
+
+```nginx
+location = /tool/timeline {
+    return 301 /tool/timeline/;
+}
+
+location /tool/timeline/ {
+    proxy_pass http://127.0.0.1:8765/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+如果你的 Nginx 使用不带尾斜杠的 `proxy_pass http://127.0.0.1:8765;`，后端也能识别 `/tool/timeline/...` 并剥掉前缀后处理。
+
+### 测试
+
+本地测试：
+
+```bash
+python3 local_app.py --no-browser
+curl -I http://127.0.0.1:8765/
+curl -I http://127.0.0.1:8765/assets/kivisense-logo.png
+```
+
+子路径测试：
+
+```bash
+BASE_PATH=/tool/timeline python3 local_app.py --no-browser
+curl -I http://127.0.0.1:8765/tool/timeline
+curl -I http://127.0.0.1:8765/tool/timeline/
+curl -I http://127.0.0.1:8765/tool/timeline/assets/kivisense-logo.png
+```
+
+浏览器 Network 面板里，图片和生成接口应请求 `/tool/timeline/assets/...`、`/tool/timeline/generate`，不应请求根路径 `/assets` 或 `/generate`。
+
 ## 基础用法
 
 直接在 Codex 里输入：
