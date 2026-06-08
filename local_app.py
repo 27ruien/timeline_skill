@@ -695,8 +695,6 @@ INDEX_HTML = """<!doctype html>
     <div class="floating-actions">
       <div class="quick-actions" aria-label="Quick add tasks">
         <button class="secondary" data-quick-add="需求" type="button"><span class="add-icon">+</span>需求</button>
-        <button class="secondary" data-quick-add="方案" type="button"><span class="add-icon">+</span>方案</button>
-        <button class="secondary" data-quick-add="设计" type="button"><span class="add-icon">+</span>设计</button>
         <button class="secondary" data-quick-add="内容物料" type="button"><span class="add-icon">+</span>内容物料</button>
         <button class="secondary" data-quick-add="内容制作" type="button"><span class="add-icon">+</span>内容制作</button>
         <button class="secondary" data-quick-add="程序开发" type="button"><span class="add-icon">+</span>程序开发</button>
@@ -892,8 +890,6 @@ INDEX_HTML = """<!doctype html>
     function renumberRows() {
       [...taskRowsEl.children].forEach((row, index) => {
         row.querySelector(".col-index").textContent = index + 1;
-        const deleteButton = row.querySelector("[data-action='delete']");
-        if (deleteButton) deleteButton.disabled = index === 0;
       });
     }
 
@@ -978,10 +974,8 @@ INDEX_HTML = """<!doctype html>
       row.querySelectorAll("[data-custom-select]").forEach(wireCustomSelect);
       wireDateLogic(row);
       row.querySelector("[data-action='delete']").addEventListener("click", () => {
-        if (taskRowsEl.children.length > 1 && row !== taskRowsEl.firstElementChild) {
-          row.remove();
-          renumberRows();
-        }
+        row.remove();
+        renumberRows();
       });
       row.addEventListener("dragstart", () => row.classList.add("dragging"));
       row.addEventListener("dragend", () => {
@@ -1040,12 +1034,18 @@ INDEX_HTML = """<!doctype html>
       syncModelVisibility();
     });
     includeStatusEl.addEventListener("change", syncStatusVisibility);
+    function inferQuickTaskStakeholder(model, name) {
+      if (model === "内容物料") return "Brands";
+      if (name.includes("反馈") || name.includes("确认")) return "Brands";
+      return "";
+    }
+
     document.querySelectorAll("[data-quick-add]").forEach((button) => {
       button.addEventListener("click", () => {
         const model = button.dataset.quickAdd || "";
         const names = quickTaskTemplates[model] || [""];
         names.forEach((name) => {
-          addRow({ model, name, workdays: 0 });
+          addRow({ model, name, stakeholder: inferQuickTaskStakeholder(model, name), workdays: 0 });
         });
       });
     });
