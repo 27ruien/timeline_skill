@@ -699,7 +699,7 @@ INDEX_HTML = """<!doctype html>
         <button class="secondary" data-quick-add="设计" type="button"><span class="add-icon">+</span>设计</button>
         <button class="secondary" data-quick-add="内容物料" type="button"><span class="add-icon">+</span>内容物料</button>
         <button class="secondary" data-quick-add="内容制作" type="button"><span class="add-icon">+</span>内容制作</button>
-        <button class="secondary" data-quick-add="开发" type="button"><span class="add-icon">+</span>开发</button>
+        <button class="secondary" data-quick-add="程序开发" type="button"><span class="add-icon">+</span>程序开发</button>
         <button class="secondary" data-quick-add="UAT" type="button"><span class="add-icon">+</span>UAT</button>
         <button class="secondary" data-quick-add="上线" type="button"><span class="add-icon">+</span>上线</button>
       </div>
@@ -750,6 +750,23 @@ INDEX_HTML = """<!doctype html>
       { model: "需求", name: "Scope addendum", stakeholder: "Brands", start: "2026-06-18", workdays: 4 },
       { model: "上线", name: "Launch online", stakeholder: "Both", start: "2026-06-30", workdays: 1 }
     ];
+    const quickTaskTemplates = {
+      "需求": ["需求梳理", "需求确认"],
+      "内容物料": ["工业模型&文件", "ID图", "交互高保"],
+      "内容制作": [
+        "高视效3D模型制作*1",
+        "高视效3D材质渲染",
+        "颜色/纹理/材质*3",
+        "渲染引擎",
+        "亮点功能",
+        "客户反馈",
+        "反馈修改",
+        "内容确认",
+        "内容交付"
+      ],
+      "程序开发": ["前后端开发", "多端适配", "数据埋点", "测试报告"],
+      "UAT": ["UAT测试 & 反馈", "UAT修改", "UAT确认"]
+    };
 
     function appPath(path) {
       const base = window.BASE_PATH || "";
@@ -1025,7 +1042,11 @@ INDEX_HTML = """<!doctype html>
     includeStatusEl.addEventListener("change", syncStatusVisibility);
     document.querySelectorAll("[data-quick-add]").forEach((button) => {
       button.addEventListener("click", () => {
-        addRow({ model: button.dataset.quickAdd || "" });
+        const model = button.dataset.quickAdd || "";
+        const names = quickTaskTemplates[model] || [""];
+        names.forEach((name) => {
+          addRow({ model, name, workdays: 0 });
+        });
       });
     });
     document.addEventListener("click", () => closeCustomSelects());
