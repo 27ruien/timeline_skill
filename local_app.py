@@ -4,16 +4,19 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import re
 import tempfile
 import webbrowser
-from datetime import datetime
+from datetime import date, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlparse
+
+from openpyxl import load_workbook
 
 from scripts.build_timeline import build_workbook
 
@@ -55,1050 +58,906 @@ def render_index_html() -> str:
     )
 
 
-INDEX_HTML = """<!doctype html>
+INDEX_HTML = r"""<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>项目排期工具</title>
+  <title>项目排期工作台</title>
   <style>
     :root {
-      --ink: #111827;
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --card-soft: #f8fbff;
+      --text: #182033;
       --muted: #667085;
-      --line: #e5e7eb;
-      --soft: #f8fafc;
-      --panel: #ffffff;
-      --accent: #00b050;
-      --accent-dark: #04733a;
-      --danger: #b42318;
-      --shadow: 0 1px 2px rgba(16, 24, 40, 0.05), 0 12px 28px rgba(16, 24, 40, 0.06);
+      --muted-2: #98a2b3;
+      --line: #dfe6f1;
+      --line-2: #edf1f7;
+      --primary: #0f62df;
+      --primary-dark: #084fb8;
+      --primary-soft: #eef5ff;
+      --green: #079455;
+      --green-soft: #e8f8ef;
+      --blue: #1b64da;
+      --blue-soft: #eaf2ff;
+      --yellow: #b77900;
+      --yellow-soft: #fff3d6;
+      --orange: #d9480f;
+      --orange-soft: #fff0e8;
+      --gray: #475467;
+      --gray-soft: #f2f4f7;
+      --danger: #d92d20;
+      --danger-soft: #fff1f0;
+      --shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
+      --radius: 18px;
     }
     * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
     body {
       margin: 0;
-      font-family: "Google Sans Text", -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
-      color: var(--ink);
-      background: #f6f8fb;
-      padding-bottom: 124px;
+      font-family: Inter, "Google Sans Text", -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 20% 0%, rgba(15, 98, 223, 0.08), transparent 34%),
+        linear-gradient(180deg, #fbfcff 0%, var(--bg) 52%, #f1f4f9 100%);
+      padding-bottom: 88px;
+      overflow-x: hidden;
     }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    .app { width: min(1560px, 100%); margin: 0 auto; padding: 0 24px 28px; }
     .topbar {
-      height: 92px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 18px;
-      padding: 0 28px;
-      background: rgba(255, 255, 255, 0.94);
-      border-bottom: 1px solid var(--line);
-      backdrop-filter: blur(12px);
+      min-height: 72px;
+      display: flex; align-items: center; justify-content: space-between; gap: 18px;
+      padding: 15px 0 16px;
     }
-    .topbar-left {
-      min-width: 0;
-      display: flex;
-      align-items: center;
-      gap: 18px;
+    .brand { display: flex; align-items: center; gap: 14px; min-width: 250px; }
+    .brand-mark {
+      width: 42px; height: 42px; border-radius: 14px;
+      display: grid; place-items: center;
+      color: #fff; font-weight: 900;
+      background: linear-gradient(135deg, #4776f5, #1457d9);
+      box-shadow: 0 10px 24px rgba(15, 98, 223, 0.24);
       flex: 0 0 auto;
     }
-    .brand-logo {
-      width: auto;
-      height: 58px;
-      object-fit: contain;
-      display: block;
-    }
-    main {
-      padding: 22px 28px 30px;
-    }
-    .example-panel {
-      width: fit-content;
-      max-width: 100%;
-      margin-left: auto;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      background: rgba(255, 255, 255, 0.78);
-      border: 1px solid #e7edf5;
-      border-radius: 12px;
-      padding: 7px;
-      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
-    }
-    .example-title {
-      flex: 0 0 auto;
-      height: 28px;
-      display: inline-flex;
-      align-items: center;
-      border-radius: 8px;
-      background: #f3f7fb;
-      padding: 0 9px;
-      color: #53657c;
-      font-size: 12px;
-      font-weight: 750;
-    }
-    .example-list {
-      min-width: 0;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-    .example-item {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      max-width: 100%;
-      height: 28px;
-      padding: 0 9px;
-      border: 1px solid #edf1f5;
-      border-radius: 8px;
-      background: #fbfcfe;
-      color: #334155;
-      font-size: 12px;
-      white-space: nowrap;
-    }
-    .example-model {
-      color: #04733a;
-      font-weight: 750;
-    }
-    .example-date {
-      color: var(--muted);
-      font-variant-numeric: tabular-nums;
-    }
-    .project-panel,
-    .task-panel {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      box-shadow: var(--shadow);
-    }
-    .project-panel {
-      width: min(860px, 100%);
-      margin-bottom: 16px;
-      padding: 16px 20px;
-    }
-    .task-panel {
-      padding: 18px;
-    }
-    .toolbar {
-      display: grid;
-      grid-template-columns: minmax(240px, 490px) auto 1fr;
-      align-items: end;
-      gap: 18px;
-    }
-    label {
-      display: block;
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--muted);
-      margin: 0 0 7px;
-    }
+    .brand-title { margin: 0; font-size: 24px; line-height: 1.1; letter-spacing: -0.04em; }
+    .brand-subtitle { margin: 5px 0 0; color: var(--muted); font-size: 13px; }
+    .header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; min-width: 0; flex-wrap: wrap; }
+    .project-title-box { display: flex; align-items: center; gap: 8px; min-width: min(560px, 48vw); }
+    .project-title-box label { color: var(--muted); font-size: 12px; font-weight: 900; white-space: nowrap; }
+    .project-title-box input { width: min(420px, 36vw); min-width: 260px; height: 40px; }
     input, select {
-      width: 100%;
-      height: 36px;
       border: 1px solid var(--line);
-      border-radius: 8px;
-      color: var(--ink);
-      background: #ffffff;
-      font: inherit;
-      padding: 7px 9px;
+      background: #fff;
+      color: var(--text);
       outline: none;
+      border-radius: 12px;
+      padding: 0 12px;
+      transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
     }
-    select {
-      appearance: none;
-      padding-right: 34px;
-      background-image: url("data:image/svg+xml,%3Csvg width='14' height='14' viewBox='0 0 14 14' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3.5 5.25L7 8.75L10.5 5.25' stroke='%23334155' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-      background-position: right 13px center;
-      background-repeat: no-repeat;
-      background-size: 14px 14px;
-    }
+    input::placeholder { color: #9aa7bb; }
     input:focus, select:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(0, 176, 80, 0.12);
+      border-color: rgba(15, 98, 223, 0.55);
+      box-shadow: 0 0 0 4px rgba(15, 98, 223, 0.10);
     }
-    .custom-select {
-      position: relative;
-    }
-    .select-trigger {
-      width: 100%;
-      height: 34px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #fff;
-      color: var(--ink);
-      font: inherit;
-      font-weight: 400;
-      text-align: left;
-      padding: 0 11px;
-      cursor: pointer;
-    }
-    .select-trigger:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(0, 176, 80, 0.12);
-      outline: none;
-    }
-    .select-menu {
-      position: absolute;
-      top: calc(100% + 6px);
-      left: 0;
-      right: 0;
-      z-index: 35;
-      display: none;
-      padding: 5px;
-      border: 1px solid #d9e2ec;
-      border-radius: 10px;
-      background: #fff;
-      box-shadow: 0 14px 34px rgba(15, 23, 42, 0.12);
-    }
-    .custom-select.open .select-menu {
-      display: block;
-    }
-    .select-option {
-      width: 100%;
-      height: 32px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      border: 0;
-      border-radius: 7px;
-      background: #fff;
-      color: #172033;
-      font: inherit;
-      font-weight: 400;
-      text-align: left;
-      padding: 0 9px;
-      cursor: pointer;
-    }
-    .select-option:hover {
-      background: #f6f8fb;
-    }
-    .select-option.selected {
-      color: #0f172a;
-      background: #fff;
-      font-weight: 520;
-    }
-    .select-option.selected::before {
-      content: "✓";
-      width: 14px;
-      color: var(--accent);
-      font-weight: 760;
-    }
-    .select-option:not(.selected)::before {
-      content: "";
-      width: 14px;
-    }
-    .select-chevron {
+    .segmented {
+      display: inline-flex; align-items: center; gap: 2px; padding: 4px; border: 1px solid var(--line);
+      background: rgba(255,255,255,.78); border-radius: 999px; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
       flex: 0 0 auto;
-      position: relative;
-      width: 14px;
-      height: 14px;
-      color: #475569;
-      font-size: 0;
     }
-    .select-chevron::after {
-      content: "";
-      position: absolute;
-      left: 3px;
-      top: 4px;
-      width: 6px;
-      height: 6px;
-      border-right: 1.5px solid currentColor;
-      border-bottom: 1.5px solid currentColor;
-      transform: rotate(45deg);
-    }
-    input[type="checkbox"] {
-      width: 16px;
-      height: 16px;
-      padding: 0;
-      accent-color: var(--accent);
-    }
-    .checks {
-      display: flex;
-      gap: 14px;
-      align-items: center;
-      padding-bottom: 8px;
-    }
-    .check {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      font-size: 13px;
-      font-weight: 700;
-      color: var(--ink);
-    }
-    .check input {
-      border-radius: 4px;
-    }
-    .primary, .secondary, .danger {
-      border: 1px solid transparent;
-      border-radius: 8px;
-      height: 34px;
-      padding: 0 13px;
-      font: inherit;
-      font-weight: 750;
-      cursor: pointer;
+    .segmented button { min-width: 72px; height: 32px; padding: 0 14px; border: 0; border-radius: 999px; color: var(--muted); background: transparent; font-weight: 850; white-space: nowrap; }
+    .segmented button.active { color: #fff; background: var(--primary); box-shadow: 0 8px 18px rgba(15, 98, 223, .25); }
+    .btn {
+      min-width: 96px; height: 40px; border-radius: 13px; border: 1px solid var(--line); background: #fff; color: var(--text);
+      padding: 0 16px; font-weight: 850; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      transition: transform .15s ease, box-shadow .15s ease, background .15s ease, border-color .15s ease;
       white-space: nowrap;
     }
-    .primary {
-      height: 36px;
-      padding: 0 16px;
-      color: #fff;
-      background: var(--accent);
-      box-shadow: none;
+    .btn:hover { transform: translateY(-1px); border-color: #cfd7e6; box-shadow: 0 10px 22px rgba(15, 23, 42, .08); }
+    .btn.primary { background: var(--primary); color: #fff; border-color: var(--primary); box-shadow: 0 12px 26px rgba(15, 98, 223, .22); }
+    .btn.primary:hover { background: var(--primary-dark); }
+    .btn.small { min-width: 0; height: 34px; padding: 0 12px; border-radius: 11px; font-size: 12px; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr) 248px; gap: 14px; align-items: start; }
+    .panel { background: rgba(255,255,255,.94); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+    .panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 22px 16px; border-bottom: 1px solid var(--line-2); }
+    .panel-title { margin: 0; font-size: 18px; line-height: 1.2; letter-spacing: -0.02em; }
+    .panel-desc { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .task-panel .panel-desc { display: none; }
+    .panel-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    .message { margin: 16px 22px 0; padding: 11px 14px; border-radius: 12px; font-size: 13px; font-weight: 800; display: none; }
+    .message.show { display: block; }
+    .message.success { color: #05603a; border: 1px solid #8be0b0; background: #edfcf3; }
+    .message.error { color: var(--danger); border: 1px solid #fda29b; background: var(--danger-soft); }
+    .table-shell { padding: 0 0 14px; }
+    .table-scroll { overflow-x: auto; overflow-y: visible; background: #fff; }
+    table { width: 100%; min-width: 900px; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+    th, td { height: 58px; padding: 10px 12px; border-bottom: 1px solid var(--line-2); vertical-align: middle; background: #fff; }
+    th { height: 44px; color: #435168; background: #f8fafd; font-size: 11px; letter-spacing: .07em; text-transform: uppercase; font-weight: 900; text-align: left; position: sticky; top: 0; z-index: 2; }
+    tbody tr:hover td { background: #fbfdff; }
+    tbody tr.dragging td { opacity: .45; background: #f8fbff !important; }
+    tbody tr.drag-over-before td { box-shadow: inset 0 3px 0 var(--primary); }
+    tbody tr.drag-over-after td { box-shadow: inset 0 -3px 0 var(--primary); }
+    tbody tr.group-start td { border-top: 10px solid #f4f7fb; }
+    tbody tr.group-0 td { background: #ffffff; }
+    tbody tr.group-1 td { background: #fbfdff; }
+    tbody tr.group-2 td { background: #fffdf8; }
+    tbody tr.group-3 td { background: #fbfffc; }
+    tbody tr.group-4 td { background: #fffbfd; }
+    tbody tr.group-5 td { background: #fcfbff; }
+    tbody tr.group-1:hover td, tbody tr.group-2:hover td, tbody tr.group-3:hover td, tbody tr.group-4:hover td, tbody tr.group-5:hover td { background: #f7fbff; }
+    .stage-pill { display:inline-flex; align-items:center; max-width:100%; min-height:32px; border:1px solid rgba(148,163,184,.24); border-radius:12px; padding:0 12px; font-weight:900; color:#253047; background: rgba(255,255,255,.72); }
+
+    tbody tr:last-child td { border-bottom: 0; }
+    td input, td select { width: 100%; height: 38px; border-radius: 12px; font-size: 13px; }
+    .date-field {
+      width: 100%; height: 38px; border-radius: 12px; border: 1px solid var(--line); background: #fff; color: var(--text);
+      display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 12px;
+      font-size: 13px; font-weight: 850; text-align: left; box-shadow: none; transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
     }
-    .primary:hover { background: var(--accent-dark); }
-    .secondary {
-      color: var(--ink);
-      background: #fff;
-      border: 1px solid var(--line);
+    .date-field:hover { border-color: #b9c7dd; background: #fbfdff; }
+    .date-field:focus { outline: none; border-color: rgba(15, 98, 223, 0.58); box-shadow: 0 0 0 4px rgba(15, 98, 223, 0.11); }
+    .date-field .date-placeholder { color: #98a2b3; font-weight: 850; }
+    .date-field .date-icon { color: var(--primary); font-size: 15px; flex: 0 0 auto; }
+    .calendar-popover {
+      position: fixed; z-index: 100; width: 292px; padding: 14px; border: 1px solid #d9e4f5; border-radius: 18px;
+      background: rgba(255,255,255,.98); box-shadow: 0 24px 60px rgba(15, 23, 42, .22); backdrop-filter: blur(14px);
     }
-    .secondary:hover {
-      background: #f9fafb;
-      border-color: #cbd5e1;
+    .calendar-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom: 12px; }
+    .calendar-title { font-size: 14px; font-weight: 950; color: #172033; letter-spacing: -0.01em; }
+    .calendar-nav { display:flex; align-items:center; gap:6px; }
+    .calendar-nav button, .calendar-day {
+      border: 1px solid transparent; background: transparent; border-radius: 10px; color: #334155; font-weight: 850;
     }
-    .danger {
-      width: 30px;
-      height: 30px;
-      padding: 0;
-      color: #98a2b3;
-      background: transparent;
-      border-color: transparent;
-      font-size: 18px;
-      line-height: 1;
-    }
-    .danger:hover {
-      color: var(--danger);
-      background: #fff1f1;
-      border-color: #ffd5d5;
-    }
-    .danger:disabled {
-      color: #d4dbe5;
-      background: transparent;
-      border-color: transparent;
-      cursor: not-allowed;
-    }
-    .section-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 8px;
-    }
-    .section-head label { margin-bottom: 0; }
-    .table-wrap {
-      overflow-x: auto;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: #fff;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
-    }
-    table {
-      width: 100%;
-      min-width: 1120px;
-      border-collapse: collapse;
-      table-layout: fixed;
-    }
-    th, td {
-      border-bottom: 1px solid var(--line);
-      padding: 8px;
-      vertical-align: middle;
-    }
-    td { height: 50px; }
-    th {
-      height: 36px;
-      background: #f9fbfd;
-      color: var(--muted);
-      font-size: 12px;
-      text-align: left;
-      font-weight: 800;
-      position: sticky;
-      top: 0;
-      z-index: 1;
-    }
-    tbody tr.dragging { opacity: 0.45; }
-    tbody tr:hover { background: #f8fbff; }
-    td input, td select { height: 34px; }
-    .col-drag { width: 44px; text-align: center; }
-    .col-index { width: 46px; text-align: center; color: var(--muted); }
-    .col-model { width: 140px; }
-    .col-task { width: 290px; }
-    .col-stakeholder { width: 190px; }
-    .col-status { width: 116px; }
-    .col-range { width: 270px; }
-    .col-days { width: 116px; }
-    .col-action { width: 58px; text-align: center; }
-    .range-field {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr);
-      align-items: center;
-      height: 34px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #fff;
-      overflow: hidden;
-    }
-    .range-field:focus-within {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(0, 176, 80, 0.12);
-    }
-    .range-field input {
-      height: 32px;
-      border: 0;
-      border-radius: 0;
-      padding: 6px 8px;
-      color: #1f2937;
-      background: transparent;
-      font-variant-numeric: tabular-nums;
-      letter-spacing: 0;
-    }
-    .range-field input:focus {
-      box-shadow: none;
-    }
-    .range-sep {
-      color: var(--muted);
-      font-size: 12px;
-      text-align: center;
-    }
-    .drag-handle {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 28px;
-      height: 28px;
-      border-radius: 5px;
-      color: var(--muted);
-      cursor: grab;
-      user-select: none;
-    }
+    .calendar-nav button { width: 30px; height: 30px; color: var(--primary); background: var(--primary-soft); }
+    .calendar-nav button:hover { border-color: #b7ccff; background:#e5efff; }
+    .calendar-week, .calendar-grid { display:grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+    .calendar-week { margin-bottom: 6px; color:#8392a9; font-size:10px; font-weight:950; text-align:center; }
+    .calendar-day { height: 32px; font-size: 12px; cursor:pointer; }
+    .calendar-day:hover { background: var(--primary-soft); border-color:#b7ccff; color: var(--primary); }
+    .calendar-day.muted { color:#bdc6d5; }
+    .calendar-day.today { border-color:#9ebcff; }
+    .calendar-day.selected { background: var(--primary); color:#fff; box-shadow:0 8px 18px rgba(15,98,223,.25); }
+    .calendar-foot { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-2); }
+    .calendar-foot button { height: 30px; border-radius: 10px; border: 1px solid var(--line); background:#fff; padding: 0 10px; font-size:12px; font-weight:900; color:#334155; }
+    .calendar-foot button.primary-lite { background: var(--primary-soft); color: var(--primary); border-color:#b7ccff; }
+    .col-stage { width: 112px; }
+    .col-task { width: 310px; }
+    .col-stakeholder { width: 160px; }
+    .col-status { width: 132px; }
+    .col-start, .col-end { width: 136px; }
+    .col-days { width: 90px; }
+    .col-actions { width: 170px; text-align: right; position: sticky; right: 0; z-index: 3; box-shadow: -12px 0 20px rgba(15, 23, 42, .05); padding-left: 8px; padding-right: 8px; }
+    th.col-actions { background: #f8fafd; z-index: 4; }
+    td.col-actions { background: #fff; }
+    tbody tr:hover td.col-actions { background: #fbfdff; }
+    .status-chip { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 78px; height: 28px; border-radius: 999px; padding: 0 10px; font-size: 12px; font-weight: 900; }
+    .status-chip::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .status-chip.done { color: var(--green); background: var(--green-soft); }
+    .status-chip.incomplete { color: var(--gray); background: var(--gray-soft); }
+    .status-wrap { position: relative; display: inline-flex; }
+    .status-wrap select { opacity: 0; position: absolute; inset: 0; cursor: pointer; }
+    .days-pill { display: inline-flex; align-items: center; justify-content: center; min-width: 58px; height: 30px; border-radius: 999px; background: #f1f5f9; font-size: 12px; font-weight: 900; color: #26344a; }
+    .days-pill.error { color: var(--danger); background: var(--danger-soft); min-width: 76px; }
+    .row-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; flex-wrap: nowrap; width: 100%; }
+    tr.dragging td { opacity: .58; background: #eef5ff !important; }
+    .drag-handle { cursor: grab; color: #334155; }
     .drag-handle:active { cursor: grabbing; }
-    .floating-actions {
-      position: fixed;
-      left: 50%;
-      bottom: 24px;
-      z-index: 20;
-      display: flex;
+    .icon-btn { width: 26px; height: 28px; border-radius: 9px; border: 1px solid var(--line); background: #fff; color: #55657b; display: inline-grid; place-items: center; font-size: 12px; font-weight: 900; flex: 0 0 auto; }
+    .icon-btn:hover { color: var(--primary); border-color: #b7ccff; background: var(--primary-soft); }
+    .side-stack { display: grid; gap: 14px; }
+    .side-card { padding: 13px; }
+    .side-card h3 { margin: 0 0 6px; font-size: 14px; }
+    .side-card p { margin: 0 0 10px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+    .template-list { display: grid; gap: 10px; }
+    .template-card { border: 1px solid var(--line); border-radius: 13px; background: #fff; padding: 10px; text-align: left; transition: all .15s ease; width: 100%; }
+    .template-card:hover, .template-card.active { border-color: #9ebcff; background: #f7faff; box-shadow: 0 10px 24px rgba(15, 98, 223, .08); }
+    .template-card strong { display: block; font-size: 12px; margin-bottom: 4px; }
+    .template-card span { display: block; color: var(--muted); font-size: 11px; line-height: 1.4; }
+    .field-controls { display: grid; gap: 8px; }
+    .check-row { height: 38px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--line); border-radius: 12px; padding: 0 12px; background: #fff; font-size: 13px; font-weight: 850; }
+    .check-row input { width: 16px; height: 16px; accent-color: var(--primary); }
+    .bottom-bar { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); width: min(1560px, calc(100vw - 48px)); z-index: 30; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 10px 14px; border: 1px solid rgba(219, 226, 236, .9); border-radius: 18px; background: rgba(255,255,255,.92); backdrop-filter: blur(16px); box-shadow: 0 16px 44px rgba(15, 23, 42, .10); }
+    .quick-add { display: flex; align-items: center; gap: 8px; overflow-x: auto; min-width: 0; padding: 6px 8px; border: 1px solid var(--line-2); border-radius: 14px; background: #f8fbff; }
+    .quick-add-label { flex: 0 0 auto; color: var(--muted); font-size: 12px; font-weight: 900; margin-right: 4px; }
+    .quick-add .btn { flex: 0 0 auto; height: 32px; background: #fff; }
+    .bar-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; }
+    .drawer-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, .36); z-index: 50; opacity: 0; pointer-events: none; transition: opacity .18s ease; }
+    .drawer-backdrop.open { opacity: 1; pointer-events: auto; }
+    .preview-drawer { position: fixed; left: 50%; bottom: 0; transform: translate(-50%, 105%); width: min(1500px, calc(100vw - 32px)); height: min(62vh, 650px); z-index: 60; background: #fff; border: 1px solid #dbe5f3; border-bottom: 0; border-radius: 24px 24px 0 0; box-shadow: 0 -30px 80px rgba(15, 23, 42, .26); transition: transform .22s ease; overflow: hidden; display: flex; flex-direction: column; }
+    .preview-drawer.open { transform: translate(-50%, 0); }
+    .drawer-head {
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--line-2);
+      display: grid;
+      grid-template-columns: auto minmax(220px, 1fr) auto 40px;
       align-items: center;
-      gap: 10px;
-      max-width: calc(100vw - 48px);
-      padding: 6px;
-      border: 1px solid rgba(203, 213, 225, 0.72);
-      border-radius: 14px;
-      background: rgba(255, 255, 255, 0.62);
-      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.12);
-      backdrop-filter: blur(20px);
-      transform: translateX(-50%);
+      gap: 14px;
+      background: linear-gradient(180deg, rgba(248,251,255,.98), rgba(255,255,255,.98));
     }
-    .floating-actions::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      border-radius: inherit;
-      pointer-events: none;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86);
+    .drawer-title h2 { margin: 0; font-size: 18px; line-height: 1.15; letter-spacing: -0.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .drawer-close { min-width: 38px; width: 38px; height: 38px; padding: 0; border-radius: 14px; }
+    .drawer-stats { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+    .compact-stat { width: 96px; height: 42px; border: 1px solid #dce6f3; background: #fff; border-radius: 14px; padding: 6px 10px; box-shadow: 0 8px 18px rgba(15,23,42,.04); }
+    .compact-stat .stat-label { display:block; color: var(--muted); font-size: 10px; line-height: 1; font-weight: 900; white-space: nowrap; }
+    .compact-stat .stat-value { display:block; margin-top: 5px; font-size: 18px; line-height: 1; font-weight: 950; letter-spacing: -0.03em; }
+    .drawer-tabs { display: inline-flex; gap: 6px; justify-content: flex-start; align-items: center; padding: 4px; border: 1px solid #dce6f3; border-radius: 999px; background: #f8fbff; }
+    .tab { flex: 0 0 auto; height: 34px; min-width: 116px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-weight: 900; }
+    .tab.active { color: #fff; background: var(--primary); border-color: var(--primary); box-shadow: 0 10px 22px rgba(15,98,223,.22); }
+    .drawer-body { min-height: 0; overflow: auto; padding: 16px 18px 24px; flex: 1; background: linear-gradient(180deg, #fbfdff, #ffffff); }
+    .gantt-card { border: 1px solid #dbe5f3; border-radius: 20px; overflow: hidden; background: #fff; box-shadow: 0 18px 45px rgba(15,23,42,.06); }
+    .timeline-scale { display: grid; grid-template-columns: 260px repeat(6, 1fr); gap: 0; color: #8392a9; font-size: 11px; font-weight: 950; padding: 14px 18px 8px; background: linear-gradient(180deg, #f8fbff, #fff); border-bottom: 1px solid #eef2f7; }
+    .timeline-scale span:not(:first-child) { text-align: center; }
+    .gantt-list { padding: 14px 18px 18px; display: grid; gap: 10px; }
+    .gantt-row { display: grid; grid-template-columns: 260px 1fr; align-items: center; gap: 14px; min-height: 34px; }
+    .gantt-name { font-size: 13px; font-weight: 900; color: #253047; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .gantt-track { position: relative; height: 32px; border-radius: 999px; background: linear-gradient(90deg, #eef4fb 0%, #f9fbfe 100%); overflow: visible; box-shadow: inset 0 0 0 1px rgba(226,232,240,.76); }
+    .gantt-bar { position: absolute; top: 6px; height: 20px; min-width: 44px; border-radius: 999px; display: grid; place-items: center; color: #fff; font-size: 11px; font-weight: 950; box-shadow: 0 7px 16px rgba(15,23,42,.18); }
+    .gantt-bar::after { content: ''; position:absolute; inset:0; border-radius: inherit; background: linear-gradient(180deg, rgba(255,255,255,.20), rgba(255,255,255,0)); pointer-events:none; }
+    .gantt-star { position: absolute; top: 50%; transform: translate(8px, -50%); width: 22px; height: 22px; border-radius: 999px; display: grid; place-items: center; background: rgba(255,255,255,.96); border: 1px solid rgba(255, 138, 0, .28); font-size: 15px; line-height: 1; color: #ff8a00; box-shadow: 0 4px 12px rgba(15,23,42,.16); z-index: 3; pointer-events: none; }
+    .timeline-scale .task-axis-title { text-align: left !important; color: #435168; font-weight: 950; letter-spacing: .04em; }
+    .excel-preview { overflow: auto; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+    .excel-preview table { min-width: 680px; width: 100%; table-layout: auto; }
+    .excel-preview th, .excel-preview td { height: 36px; padding: 8px 10px; font-size: 12px; }
+    .hidden { display: none !important; }
+    .empty { padding: 24px; color: var(--muted); text-align: center; }
+
+    /* v16 visual refinements */
+    .brand-subtitle { display: none; }
+    .brand-title { font-size: 23px; }
+    .layout { grid-template-columns: minmax(0, 1fr) 232px; }
+    .panel-head { padding: 18px 22px; }
+    td input, td select { font-weight: 500; color: #1f2937; }
+    td input { letter-spacing: 0; }
+    td select {
+      -webkit-appearance: none;
+      appearance: none;
+      background-color: #fff;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 20 20'%3E%3Cpath fill='%2364758B' d='M5.6 7.5a1 1 0 0 1 1.4 0l3 3 3-3a1 1 0 1 1 1.4 1.4l-3.7 3.7a1 1 0 0 1-1.4 0L5.6 8.9a1 1 0 0 1 0-1.4Z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 16px center;
+      background-size: 13px 13px;
+      padding-right: 40px;
     }
-    .floating-actions .primary,
-    .floating-actions .secondary {
-      position: relative;
-      height: 32px;
-      padding: 0 16px;
-      border-radius: 10px;
-      font-size: 13px;
-      font-weight: 560;
+    .date-field { font-weight: 500; letter-spacing: 0; }
+    .date-field .date-placeholder { font-weight: 600; }
+    .side-card { padding: 12px; }
+    .side-card h3 { font-size: 13px; margin-bottom: 9px; }
+    .template-list { gap: 8px; }
+    .template-card { padding: 9px 10px; border-radius: 12px; }
+    .template-card strong { font-size: 11px; margin-bottom: 3px; display:flex; align-items:center; gap:6px; }
+    .template-card span { font-size: 10.5px; line-height: 1.35; }
+    .coming-tag { display:inline-flex; align-items:center; height:18px; padding:0 6px; border-radius:999px; background:#eef5ff; color:#0f62df; font-size:9px; font-weight:900; border:1px solid #cfe0ff; white-space:nowrap; }
+    .bottom-bar {
+      background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(243,248,255,.96));
+      border-color: rgba(194, 210, 232, .95);
+      box-shadow: 0 -10px 34px rgba(15, 23, 42, .12), 0 18px 45px rgba(15, 98, 223, .08);
     }
-    .quick-actions {
-      position: relative;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      max-width: min(760px, calc(100vw - 250px));
-      overflow-x: auto;
-      scrollbar-width: none;
+    .quick-add { background: rgba(238, 245, 255, .78); border-color:#d4e2f5; }
+    .drawer-head {
+      grid-template-columns: minmax(220px, 1fr) auto minmax(190px, 1fr) 40px;
+      padding: 12px 18px;
     }
-    .quick-actions::-webkit-scrollbar {
-      display: none;
+    .drawer-title { min-width: 0; }
+    .drawer-title h2 { text-align:left; font-size:17px; }
+    .drawer-tabs { justify-self: center; min-height: 42px; }
+    .drawer-stats { justify-self: end; gap: 7px; }
+    .compact-stat { width: 86px; height: 40px; padding: 6px 9px; border-radius: 13px; background: linear-gradient(180deg, #fff, #f8fbff); }
+    .compact-stat .stat-label { font-size: 9px; color:#64748b; }
+    .compact-stat .stat-value { font-size: 16px; margin-top: 4px; }
+    .tab { height: 34px; min-width: 112px; }
+    .gantt-card { border-radius: 18px; }
+    .timeline-scale { grid-template-columns: 340px repeat(var(--week-count, 6), minmax(72px, 1fr)); padding: 12px 18px 7px; font-size: 10.5px; }
+    .gantt-row { grid-template-columns: 340px 1fr; min-height: 36px; }
+    .gantt-name { font-weight: 800; font-size: 12.5px; }
+    .gantt-track {
+      margin-right: 18px;
+      background-image: repeating-linear-gradient(to right, rgba(116, 129, 150, .18) 0 1px, transparent 1px calc(100% / var(--week-count, 6))), linear-gradient(90deg, #eef4fb 0%, #f9fbfe 100%);
     }
-    .floating-actions .primary {
-      min-width: 118px;
-      background: rgba(0, 176, 80, 0.86);
-      box-shadow: 0 6px 16px rgba(0, 176, 80, 0.12);
+    .gantt-bar { font-weight: 850; }
+
+    @media (max-width: 1100px) {
+      .layout { grid-template-columns: 1fr; }
+      .side-stack { grid-template-columns: 1fr 1fr; }
+      .project-title-box { min-width: 100%; order: 3; }
+      .project-title-box input { width: 100%; min-width: 0; }
     }
-    .floating-actions .primary:hover {
-      background: rgba(0, 146, 67, 0.9);
-    }
-    .floating-actions .secondary {
-      border-color: rgba(203, 213, 225, 0.72);
-      background: rgba(255, 255, 255, 0.54);
-      color: #172033;
-    }
-    .floating-actions .secondary:hover {
-      background: rgba(255, 255, 255, 0.78);
-    }
-    .toast {
-      position: fixed;
-      top: 22px;
-      left: 50%;
-      z-index: 40;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      min-width: 154px;
-      height: 38px;
-      padding: 0 14px;
-      border: 1px solid rgba(226, 232, 240, 0.86);
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.82);
-      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
-      color: #0f172a;
-      font-size: 13px;
-      font-weight: 560;
-      pointer-events: none;
-      opacity: 0;
-      transform: translate(-50%, -10px);
-      transition: opacity 180ms ease, transform 180ms ease;
-      backdrop-filter: blur(18px);
-    }
-    .toast.show {
-      opacity: 1;
-      transform: translate(-50%, 0);
-    }
-    .toast-icon {
-      width: 20px;
-      height: 20px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 999px;
-      color: #fff;
-      background: var(--accent);
-      font-size: 13px;
-      font-weight: 760;
-      line-height: 1;
-      box-shadow: 0 6px 14px rgba(0, 176, 80, 0.12);
-    }
-    .add-icon {
-      display: inline-block;
-      margin-right: 6px;
-      font-size: 14px;
-      line-height: 0;
-      transform: translateY(0);
-    }
-    .example {
-      display: none;
-      margin-top: auto;
-      max-width: 680px;
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.65;
-    }
-    .example pre {
-      margin: 8px 0 0;
-      padding: 12px;
-      overflow: auto;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: #fbfcfe;
-      color: #334155;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 12px;
-    }
-    .status {
-      min-height: 18px;
-      font-size: 13px;
-      color: var(--muted);
-    }
-    .status.error { color: var(--danger); }
-    @media (max-width: 860px) {
-      .topbar { padding: 0 16px; }
-      main { padding: 16px; }
-      .brand-logo { height: 44px; }
-      .example-panel { align-items: flex-start; flex-direction: column; }
-      .example-item { height: auto; min-height: 30px; white-space: normal; }
-      .toolbar { grid-template-columns: 1fr; align-items: stretch; }
-      .checks { padding-bottom: 0; }
-      .floating-actions {
-        left: 16px;
-        right: 16px;
-        justify-content: flex-start;
-        transform: none;
-      }
-      .quick-actions { max-width: calc(100vw - 190px); }
+    @media (max-width: 760px) {
+      body { padding-bottom: 126px; }
+      .app { padding: 0 14px 18px; }
+      .topbar { align-items: flex-start; flex-direction: column; }
+      .header-actions { width: 100%; justify-content: space-between; }
+      .side-stack { grid-template-columns: 1fr; }
+      .panel-head { flex-direction: column; }
+      .bottom-bar { width: calc(100vw - 24px); flex-direction: column; align-items: stretch; }
+      .bar-actions { display: grid; grid-template-columns: 1fr 1fr; }
+      .bar-actions .btn.primary { grid-column: 1 / -1; }
+      .drawer-head { grid-template-columns: 1fr 38px; align-items: start; }
+      .drawer-tabs { grid-column: 1 / -1; justify-content: flex-start; order: 1; overflow-x: auto; }
+      .drawer-title { grid-column: 1 / -1; order: 2; }
+      .drawer-stats { grid-column: 1 / -1; order: 3; justify-content: stretch; }
+      .compact-stat { flex: 1 1 0; width: auto; }
+      .preview-drawer { width: 100%; height: 78vh; border-radius: 20px 20px 0 0; }
+      .timeline-scale { grid-template-columns: 110px repeat(3, 1fr); }
+      .timeline-scale span:nth-child(n+5) { display: none; }
+      .gantt-row { grid-template-columns: 110px 1fr; }
     }
   </style>
 </head>
 <body>
-  <div class="workspace">
+  <div class="app">
     <header class="topbar">
-      <div class="topbar-left">
-        <img class="brand-logo" src="__LOGO_SRC__" alt="Kivisense">
-      </div>
-      <section class="example-panel">
-        <div class="example-title">Example</div>
-        <div class="example-list">
-          <div class="example-item">
-            <span class="example-model">需求</span>
-            <span>Project requirement</span>
-            <span>Kivisense</span>
-            <span class="example-date">2026-06-01 - 2026-06-05</span>
-            <span>5 workdays</span>
-          </div>
-          <div class="example-item">
-            <span class="example-model">设计</span>
-            <span>Creative Proposal</span>
-            <span>Kivisense + brand</span>
-            <span class="example-date">2026-06-08 - 2026-06-22</span>
-            <span>10 workdays</span>
-          </div>
-        </div>
-      </section>
-    </header>
-    <main>
-      <section class="project-panel">
-        <div class="toolbar">
-          <div>
-            <label for="projectName">Project title</label>
-            <input id="projectName" maxlength="20" value="AR Campaign" autocomplete="off">
-          </div>
-          <div class="checks">
-            <label class="check"><input id="includeModel" type="checkbox"> Model</label>
-            <label class="check"><input id="includeStatus" type="checkbox" checked> Status</label>
-          </div>
-          <div class="status" id="status"></div>
-        </div>
-      </section>
-
-      <section class="task-panel">
+      <div class="brand">
+        <div class="brand-mark">G</div>
         <div>
-          <div class="section-head">
-            <label>Task list</label>
+          <h1 class="brand-title" data-i18n="appTitle">项目排期工作台</h1>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="project-title-box">
+          <label for="projectName" data-i18n="projectTitle">项目标题</label>
+          <input id="projectName" type="text" placeholder="请输入项目标题">
+        </div>
+        <div class="segmented" aria-label="Language switcher">
+          <button id="langZh" class="active" type="button">中文</button>
+          <button id="langEn" type="button">English</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel task-panel">
+        <div class="panel-head">
+          <div>
+            <h2 class="panel-title" data-i18n="taskTableTitle">任务排期表格</h2>
+            <p class="panel-desc" data-i18n="taskTableDesc">像轻量 Excel 一样编辑任务；开始日期和结束日期分开填写，工作日自动计算。</p>
           </div>
-          <div class="table-wrap">
+        </div>
+        <div id="message" class="message"></div>
+        <div class="table-shell">
+          <div class="table-scroll">
             <table>
-            <thead>
-              <tr>
-                <th class="col-drag"></th>
-                <th class="col-index">#</th>
-                <th class="col-model" data-model-col>Model</th>
-                <th class="col-task">Task</th>
-                <th class="col-stakeholder">Stakeholder</th>
-                <th class="col-status" data-status-col>Status</th>
-                <th class="col-range">Date range</th>
-                <th class="col-days">Workdays</th>
-                <th class="col-action"></th>
-              </tr>
-            </thead>
-            <tbody id="taskRows"></tbody>
+              <thead>
+                <tr>
+                  <th class="col-stage optional-stage" data-i18n="stage">阶段</th>
+                  <th class="col-task" data-i18n="taskName">任务</th>
+                  <th class="col-stakeholder" data-i18n="stakeholder">负责人</th>
+                  <th class="col-start" data-i18n="startDate">开始日期</th>
+                  <th class="col-end" data-i18n="endDate">结束日期</th>
+                  <th class="col-days" data-i18n="workdays">工作日</th>
+                  <th class="col-status optional-status" data-i18n="status">状态</th>
+                  <th class="col-actions" data-i18n="actions">操作</th>
+                </tr>
+              </thead>
+              <tbody id="taskBody"></tbody>
             </table>
           </div>
         </div>
       </section>
+
+      <aside class="side-stack">
+        <section class="panel side-card">
+          <h3 data-i18n="templatesTitle">排期模版</h3>
+          <div class="template-list" id="templateList"></div>
+        </section>
+        <section class="panel side-card">
+          <h3 data-i18n="fieldOptionsTitle">可选展示字段</h3>
+          <p data-i18n="fieldOptionsDesc">控制表格和导出中是否展示这些字段。</p>
+          <div class="field-controls">
+            <label class="check-row"><span data-i18n="stage">阶段</span><input id="toggleStage" type="checkbox"></label>
+            <label class="check-row"><span data-i18n="status">状态</span><input id="toggleStatus" type="checkbox"></label>
+          </div>
+        </section>
+      </aside>
     </main>
-    <div class="floating-actions">
-      <div class="quick-actions" aria-label="Quick add tasks">
-        <button class="secondary" data-quick-add="需求" type="button"><span class="add-icon">+</span>需求</button>
-        <button class="secondary" data-quick-add="内容物料" type="button"><span class="add-icon">+</span>内容物料</button>
-        <button class="secondary" data-quick-add="内容制作" type="button"><span class="add-icon">+</span>内容制作</button>
-        <button class="secondary" data-quick-add="程序开发" type="button"><span class="add-icon">+</span>程序开发</button>
-        <button class="secondary" data-quick-add="UAT" type="button"><span class="add-icon">+</span>UAT</button>
-        <button class="secondary" data-quick-add="上线" type="button"><span class="add-icon">+</span>上线</button>
-      </div>
-      <button class="primary" id="generateButton" type="button">Generate</button>
-    </div>
-    <div class="toast" id="successToast" role="status" aria-live="polite">
-      <span class="toast-icon">✓</span>
-      <span class="toast-text">操作成功</span>
+  </div>
+
+  <div class="bottom-bar">
+    <div class="quick-add" id="quickAdd"></div>
+    <div class="bar-actions">
+      <input id="importFile" type="file" accept=".xlsx" hidden>
+      <button class="btn" id="importSchedule" type="button" data-i18n="importSchedule">导入排期</button>
+      <button class="btn" id="addTaskButton" type="button" data-i18n="addTask">+ 新增任务</button>
+      <button class="btn" id="openPreview" type="button" data-i18n="schedulePreview">排期预览</button>
+      <button class="btn primary" id="exportExcel" type="button" data-i18n="exportExcel">导出 Excel</button>
     </div>
   </div>
+
+  <div class="drawer-backdrop" id="drawerBackdrop"></div>
+  <div class="calendar-popover" id="datePopover" hidden></div>
+
+  <section class="preview-drawer" id="previewDrawer" aria-hidden="true">
+    <div class="drawer-head">
+      <div class="drawer-title">
+        <h2 id="previewTitle" data-title-placeholder="true">项目标题</h2>
+      </div>
+      <div class="drawer-tabs">
+        <button class="tab active" data-preview-tab="gantt" type="button" data-i18n="ganttView">甘特图</button>
+        <button class="tab" data-preview-tab="excel" type="button" data-i18n="excelView">表格</button>
+      </div>
+      <div class="drawer-stats">
+        <div class="compact-stat"><span class="stat-label" data-i18n="totalWorkweeks">总工作周</span><strong class="stat-value" id="statWeeks">0</strong></div>
+        <div class="compact-stat"><span class="stat-label" data-i18n="totalWorkdays">总工作日</span><strong class="stat-value" id="statDays">0</strong></div>
+      </div>
+      <button class="btn drawer-close" id="closePreview" type="button">×</button>
+    </div>
+    <div class="drawer-body">
+      <div id="ganttView" class="gantt-card">
+        <div class="timeline-scale" id="timelineScale"></div>
+        <div class="gantt-list" id="ganttList"></div>
+      </div>
+      <div id="excelView" class="excel-preview hidden"></div>
+    </div>
+  </section>
+
   <script>
-    window.BASE_PATH = __BASE_PATH_JSON__;
-    const taskRowsEl = document.getElementById("taskRows");
-    const projectEl = document.getElementById("projectName");
-    const includeModelEl = document.getElementById("includeModel");
-    const includeStatusEl = document.getElementById("includeStatus");
-    const statusEl = document.getElementById("status");
-    const generateButton = document.getElementById("generateButton");
-    const successToast = document.getElementById("successToast");
-    let toastTimer = null;
-    const chinaPublicHolidays = new Set([
-      "2026-01-01", "2026-01-02", "2026-01-03",
-      "2026-02-15", "2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19", "2026-02-20", "2026-02-21", "2026-02-22", "2026-02-23",
-      "2026-04-04", "2026-04-05", "2026-04-06",
-      "2026-05-01", "2026-05-02", "2026-05-03", "2026-05-04", "2026-05-05",
-      "2026-06-19", "2026-06-20", "2026-06-21",
-      "2026-09-25", "2026-09-26", "2026-09-27",
-      "2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05", "2026-10-06", "2026-10-07"
-    ]);
-    const chinaAdjustedWorkdays = new Set([
-      "2026-01-04",
-      "2026-02-14", "2026-02-28",
-      "2026-05-09",
-      "2026-09-20", "2026-10-10"
-    ]);
-
-    const standardRows = [
-      { model: "", name: "Project requirement", stakeholder: "Kivisense", start: "2026-06-01", workdays: 5 },
-      { model: "", name: "Creative Proposal", stakeholder: "Both", start: "2026-06-08", workdays: 10 },
-      { model: "", name: "Development & Integration", stakeholder: "Kivisense", start: "2026-06-15", workdays: 8 },
-      { model: "", name: "Brand Asset Review", stakeholder: "Brands", start: "2026-06-18", workdays: 4 },
-      { model: "", name: "Launch online", stakeholder: "Both", start: "2026-06-30", workdays: 1 }
-    ];
-    const modelRows = [
-      { model: "需求", name: "Project requirement", stakeholder: "Kivisense", start: "2026-06-01", workdays: 5 },
-      { model: "设计", name: "Creative Proposal", stakeholder: "Both", start: "2026-06-08", workdays: 10 },
-      { model: "开发", name: "Development & Integration", stakeholder: "Kivisense", start: "2026-06-15", workdays: 8 },
-      { model: "需求", name: "Scope addendum", stakeholder: "Brands", start: "2026-06-18", workdays: 4 },
-      { model: "上线", name: "Launch online", stakeholder: "Both", start: "2026-06-30", workdays: 1 }
-    ];
-    const quickTaskTemplates = {
-      "需求": ["需求梳理", "需求确认"],
-      "内容物料": ["工业模型&文件", "ID图", "交互高保"],
-      "内容制作": [
-        "高视效3D模型制作*1",
-        "高视效3D材质渲染",
-        "颜色/纹理/材质*3",
-        "渲染引擎",
-        "亮点功能",
-        "客户反馈",
-        "反馈修改",
-        "内容确认",
-        "内容交付"
-      ],
-      "程序开发": ["前后端开发", "多端适配", "数据埋点", "测试报告"],
-      "UAT": ["UAT测试 & 反馈", "UAT修改", "UAT确认"]
+    const BASE_PATH = __BASE_PATH_JSON__;
+    const $ = (id) => document.getElementById(id);
+    const state = { lang: 'zh', previewTab: 'gantt', tasks: [], showStage: false, showStatus: false, activeTemplate: 'ar', dragId: null };
+    const translations = {
+      zh: {
+        appTitle: '项目排期工作台', subtitle: '快速制作 Timeline、甘特图和 Excel 排期表，用于内部协作与客户交付。', projectTitle: '项目标题', projectPlaceholder: '请输入项目标题',
+        taskTableTitle: '任务排期表格', taskTableDesc: '',
+        addTask: '+ 新增任务', reset: '重置', stage: '阶段', taskName: '任务', stakeholder: '负责人', status: '状态', startDate: '开始日期', endDate: '结束日期', workdays: '工作日', actions: '操作',
+        templatesTitle: '排期模版', templatesDesc: '内置模板不会因为清空缓存丢失；套用后只修改当前任务。', fieldOptionsTitle: '可选展示字段', fieldOptionsDesc: '控制表格和导出中是否展示这些字段。',
+        schedulePreview: '排期预览', ganttView: '甘特图', excelView: '表格', exportExcel: '导出 Excel', importSchedule: '导入排期', quickAdd: '快捷添加',
+        stageCount: '阶段数量', totalWorkweeks: '总工作周', totalWorkdays: '总工作日', riskItems: '风险项', unnamed: '', empty: '请添加任务并填写日期后查看排期。', invalidDate: '日期错误',
+        generated: 'Timeline 已生成，你可以导出 Excel 给团队使用。', importSuccess: '排期已导入，你可以继续编辑或导出 Excel。', importError: '无法识别这个排期文件，请确认它使用了标准导出模板。', exportError: '请至少添加一个任务，并填写开始日期和结束日期。', rowDateError: '第 {n} 行结束日期不能早于开始日期。', nameRequired: '第 {n} 行缺少任务名称。', dateRequired: '第 {n} 行缺少开始日期或结束日期。',
+        daysUnit: '{n} 天', oneDay: '1 天',
+        statuses: { incomplete: '未完成', done: '已完成' },
+        selectStart: '选择开始日期', selectEnd: '选择结束日期', today: '今天', clearDate: '清空', previewTaskColumn: '任务 / 事项',
+        templates: { ar: ['✨ AR 项目', '需求、内容物料、内容制作、开发、UAT、上线。'], threed: ['3D 项目', '按 3D 项目标准事项自动创建完整排期。'], digital: ['数字化项目', '需求、配置、数据准备、开发联调、UAT、上线。'] }
+      },
+      en: {
+        appTitle: 'Timeline Workbench', subtitle: 'Create Timeline, Gantt and Excel schedules for internal collaboration and client delivery.', projectTitle: 'Project Title', projectPlaceholder: 'Enter project title',
+        taskTableTitle: 'Schedule Table', taskTableDesc: '',
+        addTask: '+ Add task', reset: 'Reset', stage: 'Stage', taskName: 'Task', stakeholder: 'Owner', status: 'Status', startDate: 'Start Date', endDate: 'End Date', workdays: 'Workdays', actions: 'Actions',
+        templatesTitle: 'Schedule Templates', templatesDesc: 'Built-in templates do not depend on browser cache. Applying one only edits current tasks.', fieldOptionsTitle: 'Optional Fields', fieldOptionsDesc: 'Choose whether these fields appear in the table and export.',
+        schedulePreview: 'Schedule Preview', ganttView: 'Gantt', excelView: 'Table', exportExcel: 'Export Excel', importSchedule: 'Import Schedule', quickAdd: 'Quick add',
+        stageCount: 'Stages', totalWorkweeks: 'Work Weeks', totalWorkdays: 'Workdays', riskItems: 'Risks', unnamed: '', empty: 'Add tasks and dates to preview the schedule.', invalidDate: 'Date error',
+        generated: 'Timeline generated. You can export Excel for your team.', importSuccess: 'Schedule imported. You can keep editing or export Excel.', importError: 'Unable to read this schedule. Please use the standard exported template.', exportError: 'Please add at least one task with start and end dates.', rowDateError: 'Row {n}: end date cannot be earlier than start date.', nameRequired: 'Row {n} is missing a task name.', dateRequired: 'Row {n} is missing a start or end date.',
+        daysUnit: '{n} days', oneDay: '1 day',
+        statuses: { incomplete: 'Incomplete', done: 'Done' },
+        selectStart: 'Select start date', selectEnd: 'Select end date', today: 'Today', clearDate: 'Clear', previewTaskColumn: 'Task',
+        templates: { ar: ['✨ AR Project', 'Requirement, assets, production, development, UAT and launch.'], threed: ['3D Project', 'Auto-create a full 3D project schedule.'], digital: ['Digitalization Project', 'Requirement, setup, data prep, development, UAT and launch.'] }
+      }
     };
-
-    function appPath(path) {
-      const base = window.BASE_PATH || "";
-      const normalized = path.startsWith("/") ? path : `/${path}`;
-      return `${base}${normalized}`;
+    const statusKeys = ['incomplete','done'];
+    const ownerOptions = ['Kivisense', 'Brand', 'Brand & Kivisense'];
+    const colors = { done:'#09b86f', incomplete:'#667085' };
+    const ganttPalette = ['#2563eb', '#7c3aed', '#0ea5e9', '#f97316', '#16a34a', '#db2777', '#64748b', '#14b8a6'];
+    const moduleTaskTemplates = {
+      '需求': [
+        { stage: '需求', name: '需求梳理', stakeholder: 'Brand & Kivisense' },
+        { stage: '需求', name: '需求确认', stakeholder: 'Brand & Kivisense' }
+      ],
+      '内容物料': [
+        { stage: '内容物料', name: '工业模型&文件', stakeholder: 'Brand' },
+        { stage: '内容物料', name: 'ID图', stakeholder: 'Brand' },
+        { stage: '内容物料', name: '交互高保', stakeholder: 'Brand' }
+      ],
+      '内容制作': [
+        { stage: '内容制作', name: '高视效3D模型制作*2', stakeholder: 'Kivisense' },
+        { stage: '内容制作', name: '高视效3D材质渲染，颜色/纹理/材质*2', stakeholder: 'Kivisense' },
+        { stage: '内容制作', name: '渲染引擎', stakeholder: 'Kivisense' },
+        { stage: '内容制作', name: '反馈&修改 *2', stakeholder: 'Brand & Kivisense' }
+      ],
+      '程序开发': [
+        { stage: '程序开发', name: '前后端开发：网页交互设计，海外商场&我的华为联调', stakeholder: 'Kivisense' },
+        { stage: '程序开发', name: '多端适配：UI/UX与多设配适配（PC、直版/折叠手机、PAD）', stakeholder: 'Kivisense' },
+        { stage: '程序开发', name: '数据埋点', stakeholder: 'Kivisense' },
+        { stage: '程序开发', name: '内部测试', stakeholder: 'Kivisense' },
+        { stage: '程序开发', name: '测试报告', stakeholder: 'Kivisense' }
+      ],
+      'UAT': [
+        { stage: 'UAT', name: '提供 UAT 链接', stakeholder: 'Kivisense' },
+        { stage: 'UAT', name: 'UAT 测试与反馈', stakeholder: 'Brand' },
+        { stage: 'UAT', name: 'UAT 修改与确认', stakeholder: 'Brand & Kivisense' }
+      ],
+      '上线': [
+        { stage: '上线', name: '上线', stakeholder: 'Kivisense' }
+      ]
+    };
+    function buildModuleTasks(keys) {
+      return keys.flatMap(key => (moduleTaskTemplates[key] || []).map(item => ({ ...item, status: 'incomplete', start: '', end: '' })));
     }
-
-    function parseLocalDate(value) {
-      if (!value) return null;
-      const [year, month, day] = value.split("-").map(Number);
-      return new Date(year, month - 1, day);
-    }
-
-    function formatLocalDate(date) {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-      return `${year}-${month}-${day}`;
-    }
-
-    function isWorkday(date) {
-      const key = formatLocalDate(date);
-      if (chinaAdjustedWorkdays.has(key)) return true;
-      if (chinaPublicHolidays.has(key)) return false;
-      const day = date.getDay();
-      return day !== 0 && day !== 6;
-    }
-
-    function nextWorkday(date) {
-      const next = new Date(date);
-      while (!isWorkday(next)) next.setDate(next.getDate() + 1);
-      return next;
-    }
-
-    function addWorkdays(startValue, workdays) {
-      let current = nextWorkday(parseLocalDate(startValue));
-      let remaining = Number(workdays) - 1;
-      while (remaining > 0) {
-        current.setDate(current.getDate() + 1);
-        if (isWorkday(current)) remaining -= 1;
-      }
-      return formatLocalDate(current);
-    }
-
+    const templates = [
+      { id: 'ar', tasks: [
+        { stage: '需求', name: '需求梳理与范围确认', stakeholder: 'Kivisense', status: 'incomplete', start: '2026-06-10', end: '2026-06-10' },
+        { stage: '内容物料', name: '内容物料收集', stakeholder: 'Brand', status: 'incomplete', start: '', end: '' },
+        { stage: '内容制作', name: '内容制作与效果确认', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' },
+        { stage: '程序开发', name: '程序开发与联调', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' },
+        { stage: 'UAT', name: 'UAT 验收测试', stakeholder: 'Brand & Kivisense', status: 'incomplete', start: '', end: '' },
+        { stage: '上线', name: '上线发布', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' }
+      ]},
+      { id: 'threed', tasks: buildModuleTasks(['需求','内容物料','内容制作','程序开发','UAT','上线']) },
+      { id: 'digital', tasks: [
+        { stage: '需求', name: '业务需求确认', stakeholder: 'Brand & Kivisense', status: 'incomplete', start: '', end: '' },
+        { stage: '配置', name: '后台配置与规则确认', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' },
+        { stage: '数据', name: '数据准备与校验', stakeholder: 'Brand', status: 'incomplete', start: '', end: '' },
+        { stage: '程序开发', name: '开发联调', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' },
+        { stage: 'UAT', name: 'UAT 验收', stakeholder: 'Brand & Kivisense', status: 'incomplete', start: '', end: '' },
+        { stage: '上线', name: '上线发布', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' }
+      ]}
+    ];
+    const quickStages = ['需求','内容物料','内容制作','程序开发','UAT','上线'];
+    const stageLabels = {
+      zh: { '需求':'需求', '设计':'设计', '内容物料':'内容物料', '内容制作':'内容制作', '程序开发':'程序开发', 'UAT':'UAT', '上线':'上线', '配置':'配置', '数据':'数据' },
+      en: { '需求':'Requirement', '设计':'Design', '内容物料':'Assets', '内容制作':'Production', '程序开发':'Development', 'UAT':'UAT', '上线':'Launch', '配置':'Setup', '数据':'Data' }
+    };
+    const stageReverse = Object.fromEntries(Object.entries(stageLabels.en).map(([zh,en]) => [en, zh]));
+    function stageLabel(value) { return (stageLabels[state.lang] && stageLabels[state.lang][value]) || value || ''; }
+    function stageValueFromDisplay(value) { return stageReverse[value] || value; }
+    function appPath(path) { if (!BASE_PATH) return path; return BASE_PATH + path; }
+    function t(key) { return translations[state.lang][key] || key; }
+    function uid() { return 'task-' + Math.random().toString(16).slice(2) + Date.now().toString(16); }
+    function escapeHtml(value) { return String(value ?? '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch])); }
+    function withReplacements(text, values) { return text.replace(/\{(\w+)\}/g, (_, key) => values[key] ?? ''); }
+    function parseDate(value) { if (!value) return null; const d = new Date(value + 'T00:00:00'); return Number.isNaN(d.getTime()) ? null : d; }
+    function isInvalidRange(task) { const s = parseDate(task.start); const e = parseDate(task.end); return !!(s && e && e < s); }
     function countWorkdays(startValue, endValue) {
-      let current = nextWorkday(parseLocalDate(startValue));
-      const end = nextWorkday(parseLocalDate(endValue));
-      let count = 0;
-      while (current <= end) {
-        if (isWorkday(current)) count += 1;
-        current.setDate(current.getDate() + 1);
-      }
+      const start = parseDate(startValue), end = parseDate(endValue);
+      if (!start || !end || end < start) return 0;
+      let count = 0; const cursor = new Date(start);
+      while (cursor <= end) { const day = cursor.getDay(); if (day !== 0 && day !== 6) count++; cursor.setDate(cursor.getDate() + 1); }
       return count;
     }
-
-    function stakeholderToList(value) {
-      if (value === "Both") return ["Kivisense", "Brands"];
-      if (value === "Kivisense") return ["Kivisense"];
-      if (value === "Brands") return ["Brands"];
-      return [];
+    function daysLabel(n) { return n === 1 ? t('oneDay') : withReplacements(t('daysUnit'), { n }); }
+    function formatDate(value) {
+      if (!value) return '';
+      const d = parseDate(value); if (!d) return value;
+      if (state.lang === 'zh') return value.replaceAll('-', '/');
+      return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+    }
+    function formatRange(task) { return task.start && task.end ? `${formatDate(task.start)} - ${formatDate(task.end)}` : ''; }
+    function showMessage(text, type='success') {
+      const el = $('message'); el.textContent = text; el.className = `message show ${type}`;
+      clearTimeout(showMessage.timer); showMessage.timer = setTimeout(() => el.className = 'message', 3200);
     }
 
-    function closeCustomSelects(except = null) {
-      document.querySelectorAll("[data-custom-select]").forEach((select) => {
-        if (select !== except) select.classList.remove("open");
-      });
+    function toISODate(day) {
+      const y = day.getFullYear();
+      const m = String(day.getMonth() + 1).padStart(2, '0');
+      const d = String(day.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
     }
-
-    function syncCustomSelect(select) {
-      const input = select.querySelector("input[type='hidden']");
-      const trigger = select.querySelector("[data-select-trigger]");
-      const options = [...select.querySelectorAll("[data-select-option]")];
-      const selected = options.find((option) => option.dataset.value === input.value) || options[0];
-      input.value = selected.dataset.value || "";
-      trigger.querySelector("[data-select-label]").textContent = selected.dataset.label || selected.textContent.trim();
-      options.forEach((option) => {
-        option.classList.toggle("selected", option === selected);
-      });
+    function openDatePicker(taskId, field, anchor) {
+      const task = state.tasks.find(x => x.id === taskId);
+      if (!task) return;
+      const selected = parseDate(task[field]);
+      const month = selected || new Date();
+      state.datePicker = { taskId, field, selected: task[field] || '', month: new Date(month.getFullYear(), month.getMonth(), 1) };
+      renderDatePicker(anchor);
     }
-
-    function wireCustomSelect(select) {
-      const input = select.querySelector("input[type='hidden']");
-      const trigger = select.querySelector("[data-select-trigger]");
-      const options = [...select.querySelectorAll("[data-select-option]")];
-      trigger.addEventListener("click", (event) => {
+    function closeDatePicker() {
+      $('datePopover').hidden = true;
+      state.datePicker = null;
+    }
+    function shiftPickerMonth(delta) {
+      if (!state.datePicker) return;
+      const month = state.datePicker.month;
+      state.datePicker.month = new Date(month.getFullYear(), month.getMonth() + delta, 1);
+      renderDatePicker(state.datePicker.anchor);
+    }
+    function renderDatePicker(anchor) {
+      const picker = state.datePicker;
+      if (!picker) return;
+      picker.anchor = anchor || picker.anchor;
+      const pop = $('datePopover');
+      const month = picker.month;
+      const title = state.lang === 'zh' ? `${month.getFullYear()} 年 ${month.getMonth() + 1} 月` : month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      const week = state.lang === 'zh' ? ['日','一','二','三','四','五','六'] : ['S','M','T','W','T','F','S'];
+      const first = new Date(month.getFullYear(), month.getMonth(), 1);
+      const start = new Date(first); start.setDate(first.getDate() - first.getDay());
+      const today = toISODate(new Date());
+      const days = [];
+      for (let i = 0; i < 42; i++) {
+        const d = new Date(start); d.setDate(start.getDate() + i);
+        const iso = toISODate(d);
+        const classes = ['calendar-day'];
+        if (d.getMonth() !== month.getMonth()) classes.push('muted');
+        if (iso === today) classes.push('today');
+        if (iso === picker.selected) classes.push('selected');
+        days.push(`<button type="button" class="${classes.join(' ')}" data-date-value="${iso}">${d.getDate()}</button>`);
+      }
+      pop.innerHTML = `<div class="calendar-head"><div class="calendar-title">${title}</div><div class="calendar-nav"><button type="button" data-cal-prev>‹</button><button type="button" data-cal-next>›</button></div></div><div class="calendar-week">${week.map(x => `<span>${x}</span>`).join('')}</div><div class="calendar-grid">${days.join('')}</div><div class="calendar-foot"><button type="button" data-cal-clear>${t('clearDate')}</button><button type="button" class="primary-lite" data-cal-today>${t('today')}</button></div>`;
+      pop.hidden = false;
+      pop.onmousedown = (event) => event.stopPropagation();
+      pop.onclick = (event) => event.stopPropagation();
+      const rect = picker.anchor.getBoundingClientRect();
+      const top = Math.min(window.innerHeight - pop.offsetHeight - 12, rect.bottom + 8);
+      const left = Math.min(window.innerWidth - pop.offsetWidth - 12, Math.max(12, rect.left));
+      pop.style.top = `${Math.max(12, top)}px`;
+      pop.style.left = `${left}px`;
+      pop.querySelector('[data-cal-prev]').addEventListener('click', (event) => { event.preventDefault(); event.stopPropagation(); shiftPickerMonth(-1); });
+      pop.querySelector('[data-cal-next]').addEventListener('click', (event) => { event.preventDefault(); event.stopPropagation(); shiftPickerMonth(1); });
+      pop.querySelectorAll('[data-cal-today]').forEach(btn => btn.addEventListener('click', (event) => {
         event.stopPropagation();
-        const willOpen = !select.classList.contains("open");
-        closeCustomSelects(select);
-        select.classList.toggle("open", willOpen);
-      });
-      options.forEach((option) => {
-        option.addEventListener("click", (event) => {
-          event.stopPropagation();
-          input.value = option.dataset.value || "";
-          syncCustomSelect(select);
-          select.classList.remove("open");
+        const now = new Date(); picker.month = new Date(now.getFullYear(), now.getMonth(), 1); picker.selected = toISODate(now); updateTask(picker.taskId, { [picker.field]: picker.selected }); closeDatePicker();
+      }));
+      pop.querySelector('[data-cal-clear]').addEventListener('click', (event) => { event.stopPropagation(); updateTask(picker.taskId, { [picker.field]: '' }); closeDatePicker(); });
+      pop.querySelectorAll('[data-date-value]').forEach(btn => btn.addEventListener('click', (event) => { event.stopPropagation(); updateTask(picker.taskId, { [picker.field]: btn.dataset.dateValue }); closeDatePicker(); }));
+    }
+
+    function cloneTask(task) { return { id: uid(), stage: task.stage || '', name: task.name || '', stakeholder: task.stakeholder || 'Kivisense', status: task.status || 'incomplete', start: task.start || '', end: task.end || '' }; }
+    function applyTemplate(id) { const tpl = templates.find(x => x.id === id) || templates[0]; state.activeTemplate = tpl.id; state.tasks = tpl.tasks.map(cloneTask); renderAll(); }
+    function addTask(stage='') { state.tasks.push({ id: uid(), stage, name: stage || '', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' }); renderAll(); }
+    function addModuleTasks(stage) {
+      const items = moduleTaskTemplates[stage] || [{ stage, name: stage || '', stakeholder: 'Kivisense' }];
+      state.tasks.push(...items.map(item => ({ id: uid(), stage: item.stage || stage, name: item.name || stage, stakeholder: item.stakeholder || 'Kivisense', status: 'incomplete', start: '', end: '' })));
+      renderAll();
+    }
+    function updateTask(id, patch) { const task = state.tasks.find(x => x.id === id); if (task) Object.assign(task, patch); renderAll(false); }
+    function clearDragIndicators() { document.querySelectorAll('#taskBody tr').forEach(row => row.classList.remove('drag-over-before', 'drag-over-after')); }
+    function moveTask(id, direction) { const i = state.tasks.findIndex(x => x.id === id); const j = i + direction; if (i < 0 || j < 0 || j >= state.tasks.length) return; [state.tasks[i], state.tasks[j]] = [state.tasks[j], state.tasks[i]]; renderAll(); }
+    function reorderTask(dragId, targetId, position='before') {
+      const from = state.tasks.findIndex(x => x.id === dragId);
+      let to = state.tasks.findIndex(x => x.id === targetId);
+      if (from < 0 || to < 0 || from === to) return;
+      const [item] = state.tasks.splice(from, 1);
+      if (from < to) to -= 1;
+      if (position === 'after') to += 1;
+      state.tasks.splice(Math.max(0, Math.min(to, state.tasks.length)), 0, item);
+      renderAll();
+    }
+    function removeTask(id) { state.tasks = state.tasks.filter(x => x.id !== id); renderAll(); }
+    function duplicateTask(id) { const i = state.tasks.findIndex(x => x.id === id); if (i < 0) return; state.tasks.splice(i + 1, 0, cloneTask(state.tasks[i])); renderAll(); }
+    function statusLabel(status) { return translations[state.lang].statuses[status] || status; }
+    function renderTemplates() {
+      $('templateList').innerHTML = templates.map(template => {
+        const info = translations[state.lang].templates[template.id];
+        const soon = template.id === 'ar' || template.id === 'digital';
+        const badge = soon ? `<em class="coming-tag">${state.lang === 'zh' ? '敬请期待' : 'Soon'}</em>` : '';
+        return `<button type="button" class="template-card ${state.activeTemplate === template.id ? 'active' : ''}" data-template="${template.id}"><strong>${info[0]}${badge}</strong><span>${info[1]}</span></button>`;
+      }).join('');
+      document.querySelectorAll('[data-template]').forEach(btn => btn.addEventListener('click', () => applyTemplate(btn.dataset.template)));
+    }
+    function renderQuickAdd() {
+      $('quickAdd').innerHTML = `<span class="quick-add-label">${t('quickAdd')}</span>` + quickStages.map(stage => `<button class="btn small" type="button" data-quick="${escapeHtml(stage)}">+ ${escapeHtml(stageLabel(stage))}</button>`).join('');
+      document.querySelectorAll('[data-quick]').forEach(btn => btn.addEventListener('click', () => addModuleTasks(btn.dataset.quick)));
+    }
+    function renderTasks(rebind=true) {
+      const stageOrder = [];
+      state.tasks.forEach(task => { const key = task.stage || 'default'; if (!stageOrder.includes(key)) stageOrder.push(key); });
+      $('taskBody').innerHTML = state.tasks.map((task, rowIndex) => {
+        const days = countWorkdays(task.start, task.end);
+        const invalid = isInvalidRange(task);
+        const groupIndex = stageOrder.indexOf(task.stage || 'default') % 6;
+        const prev = state.tasks[rowIndex - 1];
+        const isGroupStart = rowIndex > 0 && (prev?.stage || 'default') !== (task.stage || 'default');
+        return `<tr data-id="${task.id}" class="group-${groupIndex} ${isGroupStart ? 'group-start' : ''}">
+          <td class="col-stage optional-stage"><input data-field="stage" value="${escapeHtml(stageLabel(task.stage))}" placeholder="${t('stage')}"></td>
+          <td class="col-task"><input data-field="name" value="${escapeHtml(task.name)}" placeholder="${t('taskName')}"></td>
+          <td class="col-stakeholder"><select data-field="stakeholder">${ownerOptions.map(opt => `<option value="${opt}" ${opt === task.stakeholder ? 'selected' : ''}>${escapeHtml(opt)}</option>`).join('')}</select></td>
+          <td class="col-start"><button class="date-field" type="button" data-date-field="start"><span class="${task.start ? '' : 'date-placeholder'}">${task.start ? formatDate(task.start) : t('selectStart')}</span><span class="date-icon">▾</span></button></td>
+          <td class="col-end"><button class="date-field" type="button" data-date-field="end"><span class="${task.end ? '' : 'date-placeholder'}">${task.end ? formatDate(task.end) : t('selectEnd')}</span><span class="date-icon">▾</span></button></td>
+          <td class="col-days"><span class="days-pill ${invalid ? 'error' : ''}">${invalid ? t('invalidDate') : daysLabel(days)}</span></td>
+          <td class="col-status optional-status"><span class="status-wrap"><span class="status-chip ${task.status}">${statusLabel(task.status)}</span><select data-field="status">${statusKeys.map(key => `<option value="${key}" ${key === task.status ? 'selected' : ''}>${statusLabel(key)}</option>`).join('')}</select></span></td>
+          <td class="col-actions"><div class="row-actions"><button class="icon-btn drag-handle" draggable="true" data-action="drag" title="Drag">↕</button><button class="icon-btn" data-action="duplicate" title="Duplicate">⧉</button><button class="icon-btn" data-action="up" title="Up">↑</button><button class="icon-btn" data-action="down" title="Down">↓</button><button class="icon-btn" data-action="delete" title="Delete">×</button></div></td>
+        </tr>`;
+      }).join('');
+      applyFieldVisibility();
+      if (!rebind) bindRowEvents(); else bindRowEvents();
+    }
+    function bindRowEvents() {
+      document.querySelectorAll('#taskBody tr').forEach(row => {
+        const id = row.dataset.id;
+        row.querySelectorAll('input, select').forEach(input => input.addEventListener('change', () => {
+          const value = input.dataset.field === 'stage' ? stageValueFromDisplay(input.value) : input.value;
+          updateTask(id, { [input.dataset.field]: value });
+        }));
+        row.querySelectorAll('input[type="text"], input:not([type])').forEach(input => input.addEventListener('input', () => {
+          const task = state.tasks.find(x => x.id === id);
+          if (task) task[input.dataset.field] = input.dataset.field === 'stage' ? stageValueFromDisplay(input.value) : input.value;
+          renderPreview();
+        }));
+        row.querySelectorAll('[data-date-field]').forEach(btn => btn.addEventListener('click', () => openDatePicker(id, btn.dataset.dateField, btn)));
+        const dragHandle = row.querySelector('.drag-handle');
+        if (dragHandle) {
+          dragHandle.addEventListener('dragstart', event => { state.dragId = id; row.classList.add('dragging'); event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', id); });
+          dragHandle.addEventListener('dragend', () => { state.dragId = null; row.classList.remove('dragging'); clearDragIndicators(); });
+        }
+        row.addEventListener('dragover', event => {
+          if (state.dragId && state.dragId !== id) {
+            event.preventDefault(); event.dataTransfer.dropEffect = 'move';
+            clearDragIndicators();
+            const rect = row.getBoundingClientRect();
+            row.classList.add(event.clientY < rect.top + rect.height / 2 ? 'drag-over-before' : 'drag-over-after');
+          }
         });
-      });
-      syncCustomSelect(select);
-    }
-
-    function showSuccessToast(message = "操作成功") {
-      successToast.querySelector(".toast-text").textContent = message;
-      successToast.classList.add("show");
-      clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => {
-        successToast.classList.remove("show");
-      }, 2000);
-    }
-
-    function syncModelVisibility() {
-      document.querySelectorAll("[data-model-col]").forEach((el) => {
-        el.style.display = includeModelEl.checked ? "" : "none";
-      });
-    }
-
-    function syncStatusVisibility() {
-      document.querySelectorAll("[data-status-col]").forEach((el) => {
-        el.style.display = includeStatusEl.checked ? "" : "none";
-      });
-    }
-
-    function renumberRows() {
-      [...taskRowsEl.children].forEach((row, index) => {
-        row.querySelector(".col-index").textContent = index + 1;
-      });
-    }
-
-    function wireDateLogic(row) {
-      const start = row.querySelector('[data-field="start"]');
-      const days = row.querySelector('[data-field="workdays"]');
-      const end = row.querySelector('[data-field="end"]');
-
-      const updateEnd = () => {
-        if (start.value && Number(days.value) > 0) {
-          end.value = addWorkdays(start.value, Number(days.value));
-        }
-      };
-      const updateDays = () => {
-        if (start.value && end.value) {
-          const count = countWorkdays(start.value, end.value);
-          if (count > 0) days.value = count;
-        }
-      };
-
-      start.addEventListener("change", updateEnd);
-      days.addEventListener("input", updateEnd);
-      end.addEventListener("change", updateDays);
-      updateEnd();
-    }
-
-    function addRow(task = {}) {
-      const row = document.createElement("tr");
-      row.draggable = true;
-      row.innerHTML = `
-        <td class="col-drag"><span class="drag-handle" title="Drag to reorder">⋮⋮</span></td>
-        <td class="col-index"></td>
-        <td class="col-model" data-model-col><input data-field="model" placeholder="需求" autocomplete="off"></td>
-        <td class="col-task"><input data-field="name" placeholder="Task name" autocomplete="off"></td>
-        <td class="col-stakeholder">
-          <div class="custom-select" data-custom-select>
-            <input data-field="stakeholder" type="hidden">
-            <button class="select-trigger" data-select-trigger type="button">
-              <span data-select-label>Unassigned</span>
-              <span class="select-chevron">⌄</span>
-            </button>
-            <div class="select-menu">
-              <button class="select-option" data-select-option data-value="" data-label="Unassigned" type="button">Unassigned</button>
-              <button class="select-option" data-select-option data-value="Kivisense" data-label="Kivisense" type="button">Kivisense</button>
-              <button class="select-option" data-select-option data-value="Brands" data-label="brand" type="button">brand</button>
-              <button class="select-option" data-select-option data-value="Both" data-label="Kivisense + brand" type="button">Kivisense + brand</button>
-            </div>
-          </div>
-        </td>
-        <td class="col-status" data-status-col>
-          <div class="custom-select" data-custom-select>
-            <input data-field="status" type="hidden">
-            <button class="select-trigger" data-select-trigger type="button">
-              <span data-select-label>Incomplete</span>
-              <span class="select-chevron">⌄</span>
-            </button>
-            <div class="select-menu">
-              <button class="select-option" data-select-option data-value="incomplete" data-label="Incomplete" type="button">Incomplete</button>
-              <button class="select-option" data-select-option data-value="done" data-label="Done" type="button">Done</button>
-            </div>
-          </div>
-        </td>
-        <td class="col-range">
-          <span class="range-field">
-            <input data-field="start" type="date" autocomplete="off" aria-label="Start date">
-            <span class="range-sep">至</span>
-            <input data-field="end" type="date" autocomplete="off" aria-label="End date">
-          </span>
-        </td>
-        <td class="col-days"><input data-field="workdays" type="number" min="0" step="1" placeholder="0" autocomplete="off"></td>
-        <td class="col-action"><button class="danger" data-action="delete" type="button" title="Delete" aria-label="Delete">×</button></td>
-      `;
-      taskRowsEl.appendChild(row);
-      row.querySelector('[data-field="model"]').value = task.model || "";
-      row.querySelector('[data-field="name"]').value = task.name || "";
-      row.querySelector('[data-field="stakeholder"]').value = task.stakeholder || "";
-      row.querySelector('[data-field="status"]').value = task.status || "incomplete";
-      row.querySelector('[data-field="start"]').value = task.start || "";
-      row.querySelector('[data-field="workdays"]').value = Object.prototype.hasOwnProperty.call(task, "workdays") ? task.workdays : 0;
-      if (task.end) row.querySelector('[data-field="end"]').value = task.end;
-
-      row.querySelectorAll("[data-custom-select]").forEach(wireCustomSelect);
-      wireDateLogic(row);
-      row.querySelector("[data-action='delete']").addEventListener("click", () => {
-        row.remove();
-        renumberRows();
-      });
-      row.addEventListener("dragstart", () => row.classList.add("dragging"));
-      row.addEventListener("dragend", () => {
-        row.classList.remove("dragging");
-        renumberRows();
-      });
-      row.addEventListener("dragover", (event) => {
-        event.preventDefault();
-        const dragging = taskRowsEl.querySelector(".dragging");
-        if (!dragging || dragging === row) return;
-        const rect = row.getBoundingClientRect();
-        const after = event.clientY > rect.top + rect.height / 2;
-        taskRowsEl.insertBefore(dragging, after ? row.nextSibling : row);
-      });
-      syncModelVisibility();
-      syncStatusVisibility();
-      renumberRows();
-    }
-
-    function fillRows(rows) {
-      taskRowsEl.innerHTML = "";
-      rows.forEach(addRow);
-    }
-
-    function collectRows() {
-      const rows = [...taskRowsEl.children].map((row, index) => {
-        const model = row.querySelector('[data-field="model"]').value.trim();
-        const name = row.querySelector('[data-field="name"]').value.trim();
-        const stakeholder = row.querySelector('[data-field="stakeholder"]').value;
-        const status = row.querySelector('[data-field="status"]').value;
-        const start = row.querySelector('[data-field="start"]').value;
-        const workdays = Number(row.querySelector('[data-field="workdays"]').value);
-        const end = row.querySelector('[data-field="end"]').value;
-        if (!model && !name && !stakeholder && !start && !workdays && !end) return null;
-        if (includeModelEl.checked && !model) throw new Error(`第 ${index + 1} 行缺少 Model`);
-        if (!name) throw new Error(`第 ${index + 1} 行缺少事项名称`);
-        if (!start) throw new Error(`第 ${index + 1} 行缺少开始日期`);
-        if (!end && (!Number.isInteger(workdays) || workdays < 1)) {
-          throw new Error(`第 ${index + 1} 行需要结束日期或工作日天数`);
-        }
-        return {
-          model,
-          name,
-          owners: stakeholderToList(stakeholder),
-          status: includeStatusEl.checked ? status : "incomplete",
-          start,
-          end,
-          workdays: Number.isInteger(workdays) && workdays > 0 ? workdays : undefined
-        };
-      }).filter(Boolean);
-      if (!rows.length) throw new Error("请至少填写一条事项");
-      return rows;
-    }
-
-    includeModelEl.addEventListener("change", () => {
-      syncModelVisibility();
-    });
-    includeStatusEl.addEventListener("change", syncStatusVisibility);
-    function inferQuickTaskStakeholder(model, name) {
-      if (model === "内容物料") return "Brands";
-      if (name.includes("反馈") || name.includes("确认")) return "Brands";
-      return "";
-    }
-
-    document.querySelectorAll("[data-quick-add]").forEach((button) => {
-      button.addEventListener("click", () => {
-        const model = button.dataset.quickAdd || "";
-        const names = quickTaskTemplates[model] || [""];
-        names.forEach((name) => {
-          addRow({ model, name, stakeholder: inferQuickTaskStakeholder(model, name), workdays: 0 });
+        row.addEventListener('dragleave', () => row.classList.remove('drag-over-before', 'drag-over-after'));
+        row.addEventListener('drop', event => {
+          event.preventDefault();
+          const dragId = event.dataTransfer.getData('text/plain') || state.dragId;
+          const position = row.classList.contains('drag-over-after') ? 'after' : 'before';
+          clearDragIndicators();
+          reorderTask(dragId, id, position);
         });
+        row.querySelectorAll('[data-action]').forEach(btn => btn.addEventListener('click', () => {
+          const action = btn.dataset.action;
+          if (action === 'drag') return;
+          if (action === 'duplicate') duplicateTask(id);
+          if (action === 'up') moveTask(id, -1);
+          if (action === 'down') moveTask(id, 1);
+          if (action === 'delete') removeTask(id);
+        }));
       });
-    });
-    document.addEventListener("click", () => closeCustomSelects());
-
-    async function generate() {
-      generateButton.disabled = true;
-      statusEl.textContent = "Generating...";
-      statusEl.className = "status";
+    }
+    function applyFieldVisibility() {
+      document.querySelectorAll('.optional-stage').forEach(el => el.classList.toggle('hidden', !state.showStage));
+      document.querySelectorAll('.optional-status').forEach(el => el.classList.toggle('hidden', !state.showStatus));
+    }
+    function renderPreview() {
+      const valid = state.tasks.filter(task => task.start && task.end && !isInvalidRange(task));
+      const totalDays = valid.reduce((sum, task) => sum + countWorkdays(task.start, task.end), 0);
+      const totalWeeks = totalDays ? Math.ceil(totalDays / 5) : 0;
+      const projectTitle = $('projectName').value.trim();
+      $('previewTitle').textContent = projectTitle || t('projectTitle');
+      $('statWeeks').textContent = totalWeeks;
+      $('statDays').textContent = totalDays;
+      renderGantt(valid);
+      renderExcel();
+    }
+    function startOfWeek(day) {
+      const d = new Date(day);
+      const delta = (d.getDay() + 6) % 7;
+      d.setDate(d.getDate() - delta);
+      return d;
+    }
+    function endOfWeek(day) {
+      const d = startOfWeek(day);
+      d.setDate(d.getDate() + 6);
+      return d;
+    }
+    function weekLabel(day) {
+      return state.lang === 'zh'
+        ? `${day.getMonth()+1}/${String(day.getDate()).padStart(2,'0')}`
+        : day.toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
+    }
+    function renderGantt(tasks) {
+      if (!tasks.length) { $('timelineScale').innerHTML = ''; $('ganttList').innerHTML = `<div class="empty">${t('empty')}</div>`; return; }
+      const starts = tasks.map(x => parseDate(x.start)); const ends = tasks.map(x => parseDate(x.end));
+      const firstDay = new Date(Math.min(...starts)); const lastDay = new Date(Math.max(...ends));
+      const min = startOfWeek(firstDay); const max = endOfWeek(lastDay);
+      const span = Math.max(1, Math.round((max - min) / 86400000) + 1);
+      const weekCount = Math.max(1, Math.ceil(span / 7));
+      const weekLabels = [];
+      for (let i = 0; i < weekCount; i++) { const d = new Date(min); d.setDate(min.getDate() + i * 7); weekLabels.push(weekLabel(d)); }
+      $('timelineScale').style.setProperty('--week-count', weekCount);
+      $('timelineScale').innerHTML = `<span class="task-axis-title">${t('previewTaskColumn')}</span>` + weekLabels.map(x => `<span>${x}</span>`).join('');
+      $('ganttList').innerHTML = tasks.map((task, index) => {
+        const s = parseDate(task.start), e = parseDate(task.end);
+        const left = Math.max(0, ((s - min) / 86400000) / span * 100);
+        const width = Math.max(3.2, (((e - s) / 86400000) + 1) / span * 100);
+        const endPct = Math.min(100, left + width);
+        const days = countWorkdays(task.start, task.end);
+        const name = task.name;
+        const barColor = task.status === 'done' ? colors.done : ganttPalette[index % ganttPalette.length];
+        return `<div class="gantt-row"><div class="gantt-name" title="${escapeHtml(task.name)}">${escapeHtml(name)}</div><div class="gantt-track" style="--week-count:${weekCount}"><div class="gantt-bar" style="left:${left}%;width:${width}%;background:${barColor}">${days}d</div><span class="gantt-star" style="left:${endPct}%">★</span></div></div>`;
+      }).join('');
+    }
+    function renderExcel() {
+      const headers = [];
+      if (state.showStage) headers.push(t('stage'));
+      headers.push(t('taskName'), t('stakeholder'));
+      if (state.showStatus) headers.push(t('status'));
+      headers.push(t('startDate'), t('endDate'), t('workdays'));
+      const rows = state.tasks.map(task => {
+        const cells = [];
+        if (state.showStage) cells.push(task.stage);
+        cells.push(task.name, task.stakeholder);
+        if (state.showStatus) cells.push(statusLabel(task.status));
+        cells.push(formatDate(task.start), formatDate(task.end), daysLabel(countWorkdays(task.start, task.end)));
+        return cells;
+      });
+      $('excelView').innerHTML = `<table><thead><tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    }
+    function validate() {
+      if (!state.tasks.length) throw new Error(t('exportError'));
+      state.tasks.forEach((task, index) => {
+        if (!task.name.trim()) throw new Error(withReplacements(t('nameRequired'), { n: index + 1 }));
+        if (!task.start || !task.end) throw new Error(withReplacements(t('dateRequired'), { n: index + 1 }));
+        if (isInvalidRange(task)) throw new Error(withReplacements(t('rowDateError'), { n: index + 1 }));
+      });
+    }
+    function stakeholderToOwners(value) {
+      if (value === 'Brand') return ['Brands'];
+      if (value === 'Brand & Kivisense') return ['Kivisense', 'Brands'];
+      return ['Kivisense'];
+    }
+    function ownersToStakeholder(owners) {
+      const list = Array.isArray(owners) ? owners.map(x => String(x).toLowerCase()) : [];
+      const hasKivisense = list.some(x => x.includes('kivisense') || x.includes('弥知') || x.includes('我方'));
+      const hasBrand = list.some(x => x.includes('brand') || x.includes('品牌') || x.includes('客户'));
+      if (hasKivisense && hasBrand) return 'Brand & Kivisense';
+      if (hasBrand) return 'Brand';
+      return 'Kivisense';
+    }
+    function applyImportedSchedule(data) {
+      const importedTasks = Array.isArray(data.tasks) ? data.tasks : [];
+      if (!importedTasks.length) throw new Error(t('importError'));
+      $('projectName').value = data.project_name || '';
+      state.tasks = importedTasks.map(task => ({
+        id: uid(),
+        stage: task.model || task.stage || '',
+        name: task.name || '',
+        stakeholder: ownersToStakeholder(task.owners),
+        status: task.status === 'done' ? 'done' : 'incomplete',
+        start: task.start || '',
+        end: task.end || ''
+      }));
+      state.showStage = !!data.include_model;
+      state.showStatus = !!data.include_status;
+      $('toggleStage').checked = state.showStage;
+      $('toggleStatus').checked = state.showStatus;
+      renderAll();
+      showMessage(t('importSuccess'));
+    }
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+        reader.onerror = () => reject(reader.error || new Error('File read failed'));
+        reader.readAsDataURL(file);
+      });
+    }
+    async function importScheduleFile(file) {
+      if (!file) return;
       try {
-        const tasks = collectRows();
-        const response = await fetch(appPath("/generate"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            project_name: projectEl.value,
-            tasks,
-            include_model: includeModelEl.checked,
-            include_status: includeStatusEl.checked
-          })
-        });
-        if (!response.ok) {
-          const problem = await response.json().catch(() => ({ error: "Generate failed" }));
-          throw new Error(problem.error || "Generate failed");
-        }
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const safeName = (projectEl.value || "timeline").replace(/[\\\\/:*?"<>|\\s]+/g, "_");
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${safeName}_timeline.xlsx`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-        statusEl.textContent = "";
-        showSuccessToast("操作成功");
-      } catch (error) {
-        statusEl.textContent = error.message;
-        statusEl.className = "status error";
+        const file_b64 = await fileToBase64(file);
+        const response = await fetch(appPath('/import'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename: file.name, file_b64 }) });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || t('importError'));
+        applyImportedSchedule(data);
+      } catch (err) {
+        showMessage(err.message || t('importError'), 'error');
       } finally {
-        generateButton.disabled = false;
+        $('importFile').value = '';
       }
     }
-
-    generateButton.addEventListener("click", generate);
-    fillRows(standardRows);
-    syncModelVisibility();
-    syncStatusVisibility();
-    window.addEventListener("pageshow", () => {
-      syncModelVisibility();
-      syncStatusVisibility();
-    });
+    function collectExportTasks() {
+      validate();
+      return state.tasks.map(task => ({ model: task.stage, name: task.name, owners: stakeholderToOwners(task.stakeholder), status: task.status === 'done' ? 'done' : 'incomplete', start: task.start, end: task.end, workdays: countWorkdays(task.start, task.end) }));
+    }
+    async function exportExcel() {
+      try {
+        const tasks = collectExportTasks();
+        const response = await fetch(appPath('/generate'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_name: $('projectName').value.trim() || 'Timeline', tasks, include_model: state.showStage, include_status: state.showStatus, language: state.lang }) });
+        if (!response.ok) { const problem = await response.json().catch(() => ({ error: 'Export failed' })); throw new Error(problem.error || 'Export failed'); }
+        const blob = await response.blob(); const url = URL.createObjectURL(blob);
+        const safeName = ($('projectName').value || 'timeline').replace(/[\\/:*?"<>|\s]+/g, '_');
+        const a = document.createElement('a'); a.href = url; a.download = `${safeName}_timeline.xlsx`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+        showMessage(t('generated'));
+      } catch (err) { showMessage(err.message, 'error'); }
+    }
+    function setLanguage(lang) {
+      state.lang = lang;
+      document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+      $('langZh').classList.toggle('active', lang === 'zh'); $('langEn').classList.toggle('active', lang === 'en');
+      document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+      $('projectName').placeholder = t('projectPlaceholder');
+      renderAll();
+    }
+    function renderAll() { renderTemplates(); renderQuickAdd(); renderTasks(); renderPreview(); }
+    function openDrawer() { renderPreview(); $('drawerBackdrop').classList.add('open'); $('previewDrawer').classList.add('open'); $('previewDrawer').setAttribute('aria-hidden', 'false'); }
+    function closeDrawer() { $('drawerBackdrop').classList.remove('open'); $('previewDrawer').classList.remove('open'); $('previewDrawer').setAttribute('aria-hidden', 'true'); }
+    $('langZh').addEventListener('click', () => setLanguage('zh'));
+    $('langEn').addEventListener('click', () => setLanguage('en'));
+    $('projectName').addEventListener('input', renderPreview);
+    $('importSchedule').addEventListener('click', () => $('importFile').click());
+    $('importFile').addEventListener('change', e => importScheduleFile(e.target.files && e.target.files[0]));
+    $('addTaskButton').addEventListener('click', () => addTask(''));
+    $('exportExcel').addEventListener('click', exportExcel);
+    $('openPreview').addEventListener('click', openDrawer);
+    $('closePreview').addEventListener('click', closeDrawer);
+    $('drawerBackdrop').addEventListener('click', closeDrawer);
+    document.addEventListener('click', event => { if (!event.target.closest('.calendar-popover') && !event.target.closest('[data-date-field]')) closeDatePicker(); });
+    window.addEventListener('resize', closeDatePicker);
+    window.addEventListener('scroll', closeDatePicker, true);
+    $('toggleStage').addEventListener('change', e => { state.showStage = e.target.checked; renderAll(); });
+    $('toggleStatus').addEventListener('change', e => { state.showStatus = e.target.checked; renderAll(); });
+    document.querySelectorAll('[data-preview-tab]').forEach(tab => tab.addEventListener('click', () => { state.previewTab = tab.dataset.previewTab; document.querySelectorAll('[data-preview-tab]').forEach(item => item.classList.toggle('active', item === tab)); $('ganttView').classList.toggle('hidden', state.previewTab !== 'gantt'); $('excelView').classList.toggle('hidden', state.previewTab !== 'excel'); renderPreview(); }));
+    $('toggleStage').checked = state.showStage; $('toggleStatus').checked = state.showStatus; applyTemplate('ar'); setLanguage('zh');
   </script>
 </body>
 </html>
@@ -1108,6 +967,179 @@ INDEX_HTML = """<!doctype html>
 DATE_RE = re.compile(r"\b\d{4}[-/]\d{1,2}[-/]\d{1,2}\b")
 DURATION_RE = re.compile(r"\b\d+\s*(?:天|day|days|workday|workdays|个工作日)\b", re.IGNORECASE)
 OWNER_RE = re.compile(r"kivisense|kv|brand|brands|client|我方|客户|品牌方", re.IGNORECASE)
+
+
+
+def normalize_text(value) -> str:
+    return str(value or "").strip()
+
+
+def cell_text(value) -> str:
+    return normalize_text(value).replace("\n", " ")
+
+
+def month_from_label(value) -> int | None:
+    text = cell_text(value).lower()
+    if not text:
+        return None
+    zh_match = re.search(r"(\d{1,2})\s*月", text)
+    if zh_match:
+        month = int(zh_match.group(1))
+        return month if 1 <= month <= 12 else None
+    numeric = re.fullmatch(r"\d{1,2}", text)
+    if numeric:
+        month = int(text)
+        return month if 1 <= month <= 12 else None
+    months = {
+        "jan": 1, "january": 1, "feb": 2, "february": 2, "mar": 3, "march": 3,
+        "apr": 4, "april": 4, "may": 5, "jun": 6, "june": 6,
+        "jul": 7, "july": 7, "aug": 8, "august": 8, "sep": 9, "sept": 9, "september": 9,
+        "oct": 10, "october": 10, "nov": 11, "november": 11, "dec": 12, "december": 12,
+    }
+    return months.get(text)
+
+
+def get_merged_value(ws, row: int, col: int):
+    value = ws.cell(row, col).value
+    if value is not None:
+        return value
+    for merged in ws.merged_cells.ranges:
+        if merged.min_row <= row <= merged.max_row and merged.min_col <= col <= merged.max_col:
+            return ws.cell(merged.min_row, merged.min_col).value
+    return None
+
+
+def is_timeline_fill(cell) -> bool:
+    fill = cell.fill
+    if not fill or fill.fill_type != "solid":
+        return False
+    color = getattr(fill.fgColor, "rgb", None)
+    if not color:
+        return False
+    color = str(color).upper().replace("FF", "", 1) if str(color).upper().startswith("FF") else str(color).upper()
+    color = color[-6:]
+    return color not in {"FFFFFF", "000000", "D9D9D9", "EDEDED", "F2F2F2", "F5F5F5"}
+
+
+def normalize_import_status(value) -> str:
+    text = cell_text(value).lower()
+    if any(token in text for token in ("done", "complete", "completed", "完成", "已完成", "√", "✓")):
+        return "done"
+    return "incomplete"
+
+
+def infer_project_year(months: list[int]) -> int:
+    # Exported templates contain month/day but no year. Use current year, and increment when months wrap.
+    return datetime.now().year
+
+
+def parse_imported_workbook(file_bytes: bytes) -> dict:
+    wb = load_workbook(BytesIO(file_bytes), data_only=True)
+    ws = wb.active
+
+    header_row = None
+    desc_col = None
+    for row in range(1, min(ws.max_row, 18) + 1):
+        for col in range(1, min(ws.max_column, 12) + 1):
+            text = cell_text(ws.cell(row, col).value).lower()
+            if text in {"description", "事项", "任务", "task", "task name"}:
+                header_row = row
+                desc_col = col
+                break
+        if header_row:
+            break
+    if not header_row or not desc_col:
+        raise ValueError("无法识别排期模板表头，请使用系统导出的 Excel 模板。")
+
+    day_row = header_row + 1
+    header_map: dict[str, int] = {}
+    for col in range(1, min(ws.max_column, 20) + 1):
+        text = cell_text(get_merged_value(ws, header_row, col)).lower()
+        if text in {"model", "工作内容", "阶段", "stage"}:
+            header_map["model"] = col
+        elif text in {"description", "事项", "任务", "task", "task name"}:
+            header_map["description"] = col
+        elif text in {"kivisense", "弥知科技", "我方"}:
+            header_map["kivisense"] = col
+        elif text in {"brands", "brand", "品牌方", "客户", "客户方"}:
+            header_map["brands"] = col
+        elif text in {"status", "状态"}:
+            header_map["status"] = col
+
+    if "description" not in header_map:
+        header_map["description"] = desc_col
+    fixed_cols = [c for c in header_map.values() if c]
+    date_start_col = max(fixed_cols) + 1
+
+    date_cols: dict[int, date] = {}
+    year = infer_project_year([])
+    last_month = None
+    year_offset = 0
+    for col in range(date_start_col, ws.max_column + 1):
+        day_value = ws.cell(day_row, col).value
+        try:
+            day_int = int(day_value)
+        except (TypeError, ValueError):
+            continue
+        month = month_from_label(get_merged_value(ws, header_row, col))
+        if not month:
+            continue
+        if last_month is not None and month < last_month:
+            year_offset += 1
+        last_month = month
+        try:
+            date_cols[col] = date(year + year_offset, month, day_int)
+        except ValueError:
+            continue
+    if not date_cols:
+        raise ValueError("无法识别日期横轴，请使用系统导出的 Excel 模板。")
+
+    project_name = cell_text(ws.cell(1, 2).value) or cell_text(ws.cell(1, 1).value)
+    tasks: list[dict] = []
+    current_model = ""
+    model_col = header_map.get("model")
+    desc_col = header_map["description"]
+    kivisense_col = header_map.get("kivisense")
+    brands_col = header_map.get("brands")
+    status_col = header_map.get("status")
+
+    for row in range(day_row + 1, ws.max_row + 1):
+        name = cell_text(ws.cell(row, desc_col).value)
+        if not name:
+            continue
+        if model_col:
+            model_value = cell_text(get_merged_value(ws, row, model_col))
+            if model_value:
+                current_model = model_value
+        owners = []
+        if kivisense_col and cell_text(ws.cell(row, kivisense_col).value):
+            owners.append("Kivisense")
+        if brands_col and cell_text(ws.cell(row, brands_col).value):
+            owners.append("Brands")
+        if not owners:
+            owners.append("Kivisense")
+
+        filled_cols = [col for col in sorted(date_cols) if is_timeline_fill(ws.cell(row, col))]
+        start = date_cols[filled_cols[0]].isoformat() if filled_cols else ""
+        end = date_cols[filled_cols[-1]].isoformat() if filled_cols else ""
+        status = normalize_import_status(ws.cell(row, status_col).value) if status_col else "incomplete"
+        tasks.append({
+            "model": current_model,
+            "name": name,
+            "owners": owners,
+            "status": status,
+            "start": start,
+            "end": end,
+        })
+
+    if not tasks:
+        raise ValueError("未在模板中识别到任何排期事项。")
+    return {
+        "project_name": project_name,
+        "tasks": tasks,
+        "include_model": bool(model_col),
+        "include_status": bool(status_col),
+    }
 
 
 def parse_raw_tasks(raw_text: str, include_model: bool = False) -> list[dict]:
@@ -1186,12 +1218,23 @@ class TimelineRequestHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
         path = strip_base_path(parsed.path)
-        if path != "/generate":
-            self.send_error(404)
-            return
         try:
             length = int(self.headers.get("content-length", "0"))
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
+
+            if path == "/import":
+                file_b64 = payload.get("file_b64") or ""
+                if not file_b64:
+                    raise ValueError("请先选择一个 .xlsx 排期文件。")
+                file_bytes = base64.b64decode(file_b64)
+                imported = parse_imported_workbook(file_bytes)
+                self.respond_json(imported)
+                return
+
+            if path != "/generate":
+                self.send_error(404)
+                return
+
             include_model = bool(payload.get("include_model", False))
             include_status = bool(payload.get("include_status", True))
             structured_tasks = payload.get("tasks")
@@ -1201,6 +1244,7 @@ class TimelineRequestHandler(BaseHTTPRequestHandler):
                 "tasks": tasks,
                 "include_model": include_model,
                 "include_status": include_status,
+                "language": payload.get("language") or "zh",
             }
             workbook = build_workbook(config)
             output = BytesIO()

@@ -224,7 +224,9 @@ def normalize_tasks(raw_tasks: list[dict]) -> list[dict]:
     return tasks
 
 
-def month_label(day: date) -> str:
+def month_label(day: date, language: str = 'en') -> str:
+    if language == 'zh':
+        return f'{day.month}月'
     return day.strftime("%B")
 
 
@@ -263,25 +265,35 @@ def build_workbook(config: dict) -> Workbook:
 
     thin = Side(style="thin", color="B7B7B7")
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
-    header_fill = PatternFill("solid", fgColor="FFFFFF")
+    header_fill = PatternFill(fill_type="solid", start_color="FF000000", end_color="FF000000")
     title_font = Font(name="Microsoft YaHei", size=12)
     body_font = Font(name="Microsoft YaHei", size=8)
-    header_font = Font(name="Microsoft YaHei", size=9)
+    header_font = Font(name="Microsoft YaHei", size=9, color="FFFFFFFF", bold=True)
+
+    language = str(config.get("language") or "en").lower()
+    if language.startswith("zh") or language in {"cn", "chinese", "中文"}:
+        language = "zh"
+    else:
+        language = "en"
+    labels = {
+        "zh": {"model": "工作内容", "description": "事项", "kivisense": "弥知科技", "brands": "品牌方", "status": "状态", "done": "完成", "incomplete": "未完成"},
+        "en": {"model": "Model", "description": "Description", "kivisense": "Kivisense", "brands": "Brands", "status": "Status", "done": "Done", "incomplete": "Incomplete"},
+    }[language]
 
     project_name = config.get("project_name", "AR Campaign")
     literal_incomplete = bool(config.get("literal_incomplete_status", False))
 
-    headers = []
+    header_defs = []
     if include_model:
-        headers.append("Model")
-    headers.extend(["Description", "Kivisense", "Brands"])
+        header_defs.append(("model", labels["model"]))
+    header_defs.extend([("description", labels["description"]), ("kivisense", labels["kivisense"]), ("brands", labels["brands"])])
     if include_status:
-        headers.append("Status")
-    column_index = {header: index for index, header in enumerate(headers, start=1)}
-    date_start_col = len(headers) + 1
+        header_defs.append(("status", labels["status"]))
+    column_index = {key: index for index, (key, _label) in enumerate(header_defs, start=1)}
+    date_start_col = len(header_defs) + 1
     ws.freeze_panes = f"{get_column_letter(date_start_col)}5"
 
-    last_col = len(headers) + len(days)
+    last_col = len(header_defs) + len(days)
     last_row = 4 + len(tasks)
 
     ws.merge_cells(start_row=1, start_column=2, end_row=2, end_column=4)
@@ -292,15 +304,20 @@ def build_workbook(config: dict) -> Workbook:
     logo_path = Path(config.get("logo_path") or Path(__file__).resolve().parents[1] / "assets" / "kivisense-logo.png")
     star_path = Path(config.get("star_path") or Path(__file__).resolve().parents[1] / "assets" / "gantt-end-star.png")
     if logo_path.exists():
-        logo = Image(str(logo_path))
-        logo_width = 235
-        logo_height = 98
-        logo.width = logo_width
-        logo.height = logo_height
-        logo.anchor = one_cell_image_anchor(1, 1, logo_width, logo_height, 20, 18)
-        ws.add_image(logo)
+        try:
+            logo = Image(str(logo_path))
+            logo_width = 235
+            logo_height = 98
+            logo.width = logo_width
+            logo.height = logo_height
+            logo.anchor = one_cell_image_anchor(1, 1, logo_width, logo_height, 20, 18)
+            ws.add_image(logo)
+        except Exception:
+            # If Pillow is not installed or cannot load image assets, keep export working.
+            # Installing requirements.txt will restore embedded logo/image output.
+            pass
 
-    for col, header in enumerate(headers, start=1):
+    for col, (_key, header) in enumerate(header_defs, start=1):
         ws.merge_cells(start_row=3, start_column=col, end_row=4, end_column=col)
         cell = ws.cell(3, col)
         cell.value = header
@@ -314,41 +331,44 @@ def build_workbook(config: dict) -> Workbook:
     for offset, day in enumerate(days, start=date_start_col):
         ws.cell(4, offset).value = day.day
         ws.cell(4, offset).font = header_font
+        ws.cell(4, offset).fill = header_fill
         ws.cell(4, offset).alignment = Alignment(horizontal="center", vertical="center")
         ws.cell(4, offset).border = border
         if day.month != current_month:
             ws.merge_cells(start_row=3, start_column=month_start_col, end_row=3, end_column=offset - 1)
-            ws.cell(3, month_start_col).value = month_label(days[month_start_col - date_start_col])
+            ws.cell(3, month_start_col).value = month_label(days[month_start_col - date_start_col], language)
             ws.cell(3, month_start_col).alignment = Alignment(horizontal="center", vertical="center")
+            ws.cell(3, month_start_col).fill = header_fill
             ws.cell(3, month_start_col).font = header_font
             current_month = day.month
             month_start_col = offset
     ws.merge_cells(start_row=3, start_column=month_start_col, end_row=3, end_column=last_col)
-    ws.cell(3, month_start_col).value = month_label(days[month_start_col - date_start_col])
+    ws.cell(3, month_start_col).value = month_label(days[month_start_col - date_start_col], language)
     ws.cell(3, month_start_col).alignment = Alignment(horizontal="center", vertical="center")
+    ws.cell(3, month_start_col).fill = header_fill
     ws.cell(3, month_start_col).font = header_font
 
     day_to_col = {day: index + date_start_col for index, day in enumerate(days)}
     for row_offset, task in enumerate(tasks, start=5):
         if include_model:
-            ws.cell(row_offset, column_index["Model"]).value = task["model"]
+            ws.cell(row_offset, column_index["model"]).value = task["model"]
 
-        description_col = column_index["Description"]
+        description_col = column_index["description"]
         ws.cell(row_offset, description_col).value = task["name"]
         ws.cell(row_offset, description_col).alignment = Alignment(horizontal="left", vertical="center")
         ws.cell(row_offset, description_col).font = body_font
 
         if "Kivisense" in task["owners"]:
-            ws.cell(row_offset, column_index["Kivisense"]).value = "√"
+            ws.cell(row_offset, column_index["kivisense"]).value = "√"
         if "Brands" in task["owners"]:
-            ws.cell(row_offset, column_index["Brands"]).value = "√"
+            ws.cell(row_offset, column_index["brands"]).value = "√"
 
         if include_status:
             completed_tokens = {"complete", "completed", "done", "完成", "已完成", "√"}
             if task["status"] in completed_tokens:
-                ws.cell(row_offset, column_index["Status"]).value = "√"
+                ws.cell(row_offset, column_index["status"]).value = labels["done"] if language == "zh" else "√"
             elif literal_incomplete:
-                ws.cell(row_offset, column_index["Status"]).value = "未完成"
+                ws.cell(row_offset, column_index["status"]).value = labels["incomplete"]
 
         fill = PatternFill("solid", fgColor=task["bar_color"])
         for day in workday_range(task["start"], task["end"]):
@@ -357,21 +377,32 @@ def build_workbook(config: dict) -> Workbook:
                 ws.cell(row_offset, col).fill = fill
 
         end_col = day_to_col.get(task["end"])
-        if star_path.exists() and end_col:
-            star = Image(str(star_path))
-            star_width = 25
-            star_height = 27
-            star.width = star_width
-            star.height = star_height
-            star.anchor = one_cell_image_anchor(
-                end_col,
-                row_offset,
-                star_width,
-                star_height,
-                max((TIMELINE_CELL_PX - star_width) / 2, 0),
-                max((TIMELINE_CELL_PX - star_height) / 2, 0),
-            )
-            ws.add_image(star)
+        if end_col:
+            image_added = False
+            if star_path.exists():
+                try:
+                    star = Image(str(star_path))
+                    star_width = 25
+                    star_height = 27
+                    star.width = star_width
+                    star.height = star_height
+                    star.anchor = one_cell_image_anchor(
+                        end_col,
+                        row_offset,
+                        star_width,
+                        star_height,
+                        max((TIMELINE_CELL_PX - star_width) / 2, 0),
+                        max((TIMELINE_CELL_PX - star_height) / 2, 0),
+                    )
+                    ws.add_image(star)
+                    image_added = True
+                except Exception:
+                    image_added = False
+            if not image_added:
+                star_cell = ws.cell(row_offset, end_col)
+                star_cell.value = "★"
+                star_cell.font = Font(name="Microsoft YaHei", size=11, bold=True, color="C00000")
+                star_cell.alignment = Alignment(horizontal="center", vertical="center")
 
         for col in range(1, last_col + 1):
             c = ws.cell(row_offset, col)
@@ -384,7 +415,7 @@ def build_workbook(config: dict) -> Workbook:
                 c.alignment = Alignment(horizontal="center", vertical="center")
 
     if include_model:
-        model_col = column_index["Model"]
+        model_col = column_index["model"]
         group_start = 5
         while group_start <= last_row:
             model = ws.cell(group_start, model_col).value
@@ -398,15 +429,22 @@ def build_workbook(config: dict) -> Workbook:
             cell.alignment = Alignment(horizontal="center", vertical="center")
             group_start = group_end + 1
 
+
+    # Force the full two-row header band to render as black background with white text,
+    # including cells inside merged ranges across Excel, Numbers and Google Sheets.
     for row in range(3, 5):
         for col in range(1, last_col + 1):
-            ws.cell(row, col).border = border
+            cell = ws.cell(row, col)
+            cell.fill = copy(header_fill)
+            cell.font = copy(header_font)
+            cell.border = border
+            cell.alignment = Alignment(horizontal="center", vertical="center")
 
     for header, col in column_index.items():
         letter = get_column_letter(col)
-        if header == "Description":
+        if header == "description":
             ws.column_dimensions[letter].width = 47
-        elif header == "Model":
+        elif header == "model":
             ws.column_dimensions[letter].width = 28
         else:
             ws.column_dimensions[letter].width = 14
