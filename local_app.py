@@ -499,6 +499,7 @@ INDEX_HTML = r"""<!doctype html>
             <table>
               <thead>
                 <tr>
+                  <th class="col-stage" data-i18n="stage">阶段</th>
                   <th class="col-task" data-i18n="taskName">任务</th>
                   <th class="col-stakeholder" data-i18n="stakeholder">负责人</th>
                   <th class="col-start" data-i18n="startDate">开始日期</th>
@@ -952,6 +953,7 @@ INDEX_HTML = r"""<!doctype html>
         const days = countWorkdays(task.start, task.end);
         const invalid = isInvalidRange(task);
         return `<tr data-id="${task.id}">
+          <td class="col-stage"><input data-field="stage" value="${escapeHtml(task.stage)}" placeholder="${t('stage')}"></td>
           <td class="col-task"><input data-field="name" value="${escapeHtml(task.name)}" placeholder="${t('taskName')}"></td>
           <td class="col-stakeholder"><select data-field="stakeholder">${ownerOptions.map(opt => `<option value="${opt}" ${opt === task.stakeholder ? 'selected' : ''}>${escapeHtml(opt)}</option>`).join('')}</select></td>
           <td class="col-start"><button class="date-field" type="button" data-date-field="start"><span class="${task.start ? '' : 'date-placeholder'}">${task.start ? formatDate(task.start) : t('selectStart')}</span><span class="date-icon">▾</span></button></td>
