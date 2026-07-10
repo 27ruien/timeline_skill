@@ -22,9 +22,11 @@ Canonical form:
 }
 ```
 
-## Model Rows
+## Stage / Model Rows
 
-When `include_model` is enabled, parse each line as:
+Stage is a first-class field in the workbench. In JSON input, pass the stage text as `model` or `stage`; the generator writes that value exactly into the `Model` / `工作内容` column. `include_model` is kept for older inputs, but current exports always include the stage column.
+
+For raw text input, rows are parsed as:
 
 ```text
 Model, 事项名称, 相关方, 开始日期, 工作日天数或结束日期
@@ -40,6 +42,8 @@ Example:
 
 Output rules:
 
+- Preserve the input `model` text exactly. Do not translate `Requirement` into `需求`, and do not translate `需求` into `Requirement`.
+- If `model` is empty, use `未分类` for Chinese output or `Uncategorized` for English output.
 - Group the same Model together even if the rows were entered non-adjacently.
 - Preserve first-seen Model group order.
 - Sort items inside each Model group by start date.

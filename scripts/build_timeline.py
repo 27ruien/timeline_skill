@@ -174,10 +174,10 @@ def assign_bar_colors(tasks: list[dict]) -> None:
         recent.append(task["bar_color"])
 
 
-def group_tasks_by_model(tasks: list[dict]) -> list[dict]:
+def group_tasks_by_model(tasks: list[dict], default_model: str) -> list[dict]:
     model_order: dict[str, int] = {}
     for task in tasks:
-        model = task.get("model") or "未分类"
+        model = task.get("model") or default_model
         task["model"] = model
         if model not in model_order:
             model_order[model] = len(model_order)
@@ -217,7 +217,7 @@ def normalize_tasks(raw_tasks: list[dict]) -> list[dict]:
                 "status": status,
                 "category": infer_category(raw),
                 "color": raw.get("color") or raw.get("颜色"),
-                "model": str(raw.get("model") or raw.get("module") or raw.get("工作内容") or "").strip(),
+                "model": str(raw.get("model") or raw.get("stage") or raw.get("module") or raw.get("工作内容") or raw.get("阶段") or "").strip(),
                 "original_index": index,
             }
         )
@@ -244,13 +244,18 @@ def one_cell_image_anchor(col: int, row: int, width_px: int, height_px: int, x_o
 
 
 def build_workbook(config: dict) -> Workbook:
+    language = str(config.get("language") or "en").lower()
+    if language.startswith("zh") or language in {"cn", "chinese", "中文"}:
+        language = "zh"
+    else:
+        language = "en"
     tasks = normalize_tasks(config.get("tasks", []))
     if not tasks:
         raise ValueError("Input JSON must include at least one task")
-    include_model = bool(config.get("include_model", False))
+    include_model = True
     include_status = bool(config.get("include_status", True))
     if include_model:
-        tasks = group_tasks_by_model(tasks)
+        tasks = group_tasks_by_model(tasks, "未分类" if language == "zh" else "Uncategorized")
     assign_bar_colors(tasks)
 
     min_start = min(task["start"] for task in tasks)
@@ -270,11 +275,6 @@ def build_workbook(config: dict) -> Workbook:
     body_font = Font(name="Microsoft YaHei", size=8)
     header_font = Font(name="Microsoft YaHei", size=9, color="FFFFFFFF", bold=True)
 
-    language = str(config.get("language") or "en").lower()
-    if language.startswith("zh") or language in {"cn", "chinese", "中文"}:
-        language = "zh"
-    else:
-        language = "en"
     labels = {
         "zh": {"model": "工作内容", "description": "事项", "kivisense": "弥知科技", "brands": "品牌方", "status": "状态", "done": "完成", "incomplete": "未完成"},
         "en": {"model": "Model", "description": "Description", "kivisense": "Kivisense", "brands": "Brands", "status": "Status", "done": "Done", "incomplete": "Incomplete"},

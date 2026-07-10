@@ -169,9 +169,77 @@ INDEX_HTML = r"""<!doctype html>
     .message.show { display: block; }
     .message.success { color: #05603a; border: 1px solid #8be0b0; background: #edfcf3; }
     .message.error { color: var(--danger); border: 1px solid #fda29b; background: var(--danger-soft); }
+    .stage-workbench {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+      gap: 14px;
+      align-items: center;
+      padding: 14px 22px;
+      border-bottom: 1px solid var(--line-2);
+      background: linear-gradient(180deg, #ffffff, #fbfdff);
+    }
+    .stage-tabs {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      overflow-x: auto;
+      padding: 2px 0 4px;
+      scrollbar-width: thin;
+    }
+    .stage-tab {
+      flex: 0 0 auto;
+      min-width: 92px;
+      height: 36px;
+      padding: 0 14px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: #475569;
+      font-size: 13px;
+      font-weight: 850;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      white-space: nowrap;
+      transition: background .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
+    }
+    .stage-tab:hover { border-color: #b7ccff; background: var(--primary-soft); color: var(--primary); }
+    .stage-tab.active { background: #111827; border-color: #111827; color: #fff; box-shadow: 0 10px 22px rgba(15, 23, 42, .16); }
+    .stage-tab-count {
+      min-width: 22px;
+      height: 22px;
+      padding: 0 7px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(148,163,184,.16);
+      color: inherit;
+      font-size: 11px;
+      font-weight: 900;
+    }
+    .stage-tab.active .stage-tab-count { background: rgba(255,255,255,.18); }
+    .stage-name-control {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: 10px;
+      justify-self: end;
+      width: 100%;
+    }
+    .stage-name-control span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+    .stage-name-control input { width: 100%; height: 38px; border-radius: 12px; }
     .table-shell { padding: 0 0 14px; }
     .table-scroll { overflow-x: auto; overflow-y: visible; background: #fff; }
-    table { width: 100%; min-width: 900px; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+    table { width: 100%; min-width: 790px; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
     th, td { height: 58px; padding: 10px 12px; border-bottom: 1px solid var(--line-2); vertical-align: middle; background: #fff; }
     th { height: 44px; color: #435168; background: #f8fafd; font-size: 11px; letter-spacing: .07em; text-transform: uppercase; font-weight: 900; text-align: left; position: sticky; top: 0; z-index: 2; }
     tbody tr:hover td { background: #fbfdff; }
@@ -361,6 +429,8 @@ INDEX_HTML = r"""<!doctype html>
       .side-stack { grid-template-columns: 1fr 1fr; }
       .project-title-box { min-width: 100%; order: 3; }
       .project-title-box input { width: 100%; min-width: 0; }
+      .stage-workbench { grid-template-columns: 1fr; }
+      .stage-name-control { justify-self: stretch; }
     }
     @media (max-width: 760px) {
       body { padding-bottom: 126px; }
@@ -369,6 +439,9 @@ INDEX_HTML = r"""<!doctype html>
       .header-actions { width: 100%; justify-content: space-between; }
       .side-stack { grid-template-columns: 1fr; }
       .panel-head { flex-direction: column; }
+      .stage-workbench { padding: 12px 14px; gap: 10px; }
+      .stage-tab { min-width: 84px; height: 34px; padding: 0 12px; }
+      .stage-name-control { grid-template-columns: 1fr; gap: 6px; }
       .bottom-bar { width: calc(100vw - 24px); flex-direction: column; align-items: stretch; }
       .bar-actions { display: grid; grid-template-columns: 1fr 1fr; }
       .bar-actions .btn.primary { grid-column: 1 / -1; }
@@ -414,12 +487,18 @@ INDEX_HTML = r"""<!doctype html>
           </div>
         </div>
         <div id="message" class="message"></div>
+        <div class="stage-workbench">
+          <div class="stage-tabs" id="stageTabs" aria-label="Stage tabs"></div>
+          <label class="stage-name-control">
+            <span data-i18n="currentStage">当前阶段</span>
+            <input id="stageNameInput" type="text" placeholder="阶段名称">
+          </label>
+        </div>
         <div class="table-shell">
           <div class="table-scroll">
             <table>
               <thead>
                 <tr>
-                  <th class="col-stage optional-stage" data-i18n="stage">阶段</th>
                   <th class="col-task" data-i18n="taskName">任务</th>
                   <th class="col-stakeholder" data-i18n="stakeholder">负责人</th>
                   <th class="col-start" data-i18n="startDate">开始日期</th>
@@ -442,9 +521,8 @@ INDEX_HTML = r"""<!doctype html>
         </section>
         <section class="panel side-card">
           <h3 data-i18n="fieldOptionsTitle">可选展示字段</h3>
-          <p data-i18n="fieldOptionsDesc">控制表格和导出中是否展示这些字段。</p>
+          <p data-i18n="fieldOptionsDesc">阶段始终展示并导出；这里仅控制状态列。</p>
           <div class="field-controls">
-            <label class="check-row"><span data-i18n="stage">阶段</span><input id="toggleStage" type="checkbox"></label>
             <label class="check-row"><span data-i18n="status">状态</span><input id="toggleStatus" type="checkbox"></label>
           </div>
         </section>
@@ -493,14 +571,15 @@ INDEX_HTML = r"""<!doctype html>
   <script>
     const BASE_PATH = __BASE_PATH_JSON__;
     const $ = (id) => document.getElementById(id);
-    const state = { lang: 'zh', previewTab: 'gantt', tasks: [], showStage: false, showStatus: false, activeTemplate: 'ar', dragId: null };
+    const state = { lang: 'zh', previewTab: 'gantt', tasks: [], showStatus: false, activeTemplate: 'ar', activeStage: '', dragId: null };
     const translations = {
       zh: {
         appTitle: '项目排期工作台', subtitle: '快速制作 Timeline、甘特图和 Excel 排期表，用于内部协作与客户交付。', projectTitle: '项目标题', projectPlaceholder: '请输入项目标题',
         taskTableTitle: '任务排期表格', taskTableDesc: '',
         addTask: '+ 新增任务', reset: '重置', stage: '阶段', taskName: '任务', stakeholder: '负责人', status: '状态', startDate: '开始日期', endDate: '结束日期', workdays: '工作日', actions: '操作',
-        templatesTitle: '排期模版', templatesDesc: '内置模板不会因为清空缓存丢失；套用后只修改当前任务。', fieldOptionsTitle: '可选展示字段', fieldOptionsDesc: '控制表格和导出中是否展示这些字段。',
+        templatesTitle: '排期模版', templatesDesc: '内置模板不会因为清空缓存丢失；套用后只修改当前任务。', fieldOptionsTitle: '可选展示字段', fieldOptionsDesc: '阶段始终展示并导出；这里仅控制状态列。',
         schedulePreview: '排期预览', ganttView: '甘特图', excelView: '表格', exportExcel: '导出 Excel', importSchedule: '导入排期', quickAdd: '快捷添加',
+        currentStage: '当前阶段', stageNamePlaceholder: '阶段名称',
         stageCount: '阶段数量', totalWorkweeks: '总工作周', totalWorkdays: '总工作日', riskItems: '风险项', unnamed: '', empty: '请添加任务并填写日期后查看排期。', invalidDate: '日期错误',
         generated: 'Timeline 已生成，你可以导出 Excel 给团队使用。', importSuccess: '排期已导入，你可以继续编辑或导出 Excel。', importError: '无法识别这个排期文件，请确认它使用了标准导出模板。', exportError: '请至少添加一个任务，并填写开始日期和结束日期。', rowDateError: '第 {n} 行结束日期不能早于开始日期。', nameRequired: '第 {n} 行缺少任务名称。', dateRequired: '第 {n} 行缺少开始日期或结束日期。',
         daysUnit: '{n} 天', oneDay: '1 天',
@@ -512,8 +591,9 @@ INDEX_HTML = r"""<!doctype html>
         appTitle: 'Timeline Workbench', subtitle: 'Create Timeline, Gantt and Excel schedules for internal collaboration and client delivery.', projectTitle: 'Project Title', projectPlaceholder: 'Enter project title',
         taskTableTitle: 'Schedule Table', taskTableDesc: '',
         addTask: '+ Add task', reset: 'Reset', stage: 'Stage', taskName: 'Task', stakeholder: 'Owner', status: 'Status', startDate: 'Start Date', endDate: 'End Date', workdays: 'Workdays', actions: 'Actions',
-        templatesTitle: 'Schedule Templates', templatesDesc: 'Built-in templates do not depend on browser cache. Applying one only edits current tasks.', fieldOptionsTitle: 'Optional Fields', fieldOptionsDesc: 'Choose whether these fields appear in the table and export.',
+        templatesTitle: 'Schedule Templates', templatesDesc: 'Built-in templates do not depend on browser cache. Applying one only edits current tasks.', fieldOptionsTitle: 'Optional Fields', fieldOptionsDesc: 'Stage is always shown and exported. This only controls Status.',
         schedulePreview: 'Schedule Preview', ganttView: 'Gantt', excelView: 'Table', exportExcel: 'Export Excel', importSchedule: 'Import Schedule', quickAdd: 'Quick add',
+        currentStage: 'Current Stage', stageNamePlaceholder: 'Stage name',
         stageCount: 'Stages', totalWorkweeks: 'Work Weeks', totalWorkdays: 'Workdays', riskItems: 'Risks', unnamed: '', empty: 'Add tasks and dates to preview the schedule.', invalidDate: 'Date error',
         generated: 'Timeline generated. You can export Excel for your team.', importSuccess: 'Schedule imported. You can keep editing or export Excel.', importError: 'Unable to read this schedule. Please use the standard exported template.', exportError: 'Please add at least one task with start and end dates.', rowDateError: 'Row {n}: end date cannot be earlier than start date.', nameRequired: 'Row {n} is missing a task name.', dateRequired: 'Row {n} is missing a start or end date.',
         daysUnit: '{n} days', oneDay: '1 day',
@@ -526,68 +606,127 @@ INDEX_HTML = r"""<!doctype html>
     const ownerOptions = ['Kivisense', 'Brand', 'Brand & Kivisense'];
     const colors = { done:'#09b86f', incomplete:'#667085' };
     const ganttPalette = ['#2563eb', '#7c3aed', '#0ea5e9', '#f97316', '#16a34a', '#db2777', '#64748b', '#14b8a6'];
+    const quickStages = {
+      zh: ['需求', '方案', '设计', '开发', '测试', '上线', '联调'],
+      en: ['Requirement', 'Proposal', 'Design', 'Development', 'Testing', 'Launch', 'Integration']
+    };
     const moduleTaskTemplates = {
-      '需求': [
-        { stage: '需求', name: '需求梳理', stakeholder: 'Brand & Kivisense' },
-        { stage: '需求', name: '需求确认', stakeholder: 'Brand & Kivisense' }
-      ],
-      '内容物料': [
-        { stage: '内容物料', name: '工业模型&文件', stakeholder: 'Brand' },
-        { stage: '内容物料', name: 'ID图', stakeholder: 'Brand' },
-        { stage: '内容物料', name: '交互高保', stakeholder: 'Brand' }
-      ],
-      '内容制作': [
-        { stage: '内容制作', name: '高视效3D模型制作*2', stakeholder: 'Kivisense' },
-        { stage: '内容制作', name: '高视效3D材质渲染，颜色/纹理/材质*2', stakeholder: 'Kivisense' },
-        { stage: '内容制作', name: '渲染引擎', stakeholder: 'Kivisense' },
-        { stage: '内容制作', name: '反馈&修改 *2', stakeholder: 'Brand & Kivisense' }
-      ],
-      '程序开发': [
-        { stage: '程序开发', name: '前后端开发：网页交互设计，海外商场&我的华为联调', stakeholder: 'Kivisense' },
-        { stage: '程序开发', name: '多端适配：UI/UX与多设配适配（PC、直版/折叠手机、PAD）', stakeholder: 'Kivisense' },
-        { stage: '程序开发', name: '数据埋点', stakeholder: 'Kivisense' },
-        { stage: '程序开发', name: '内部测试', stakeholder: 'Kivisense' },
-        { stage: '程序开发', name: '测试报告', stakeholder: 'Kivisense' }
-      ],
-      'UAT': [
-        { stage: 'UAT', name: '提供 UAT 链接', stakeholder: 'Kivisense' },
-        { stage: 'UAT', name: 'UAT 测试与反馈', stakeholder: 'Brand' },
-        { stage: 'UAT', name: 'UAT 修改与确认', stakeholder: 'Brand & Kivisense' }
-      ],
-      '上线': [
-        { stage: '上线', name: '上线', stakeholder: 'Kivisense' }
-      ]
+      zh: {
+        '需求': [
+          { stage: '需求', name: '需求梳理', stakeholder: 'Brand & Kivisense' },
+          { stage: '需求', name: '需求确认', stakeholder: 'Brand & Kivisense' }
+        ],
+        '方案': [
+          { stage: '方案', name: '方案设计', stakeholder: 'Kivisense' },
+          { stage: '方案', name: '方案评审与确认', stakeholder: 'Brand & Kivisense' }
+        ],
+        '设计': [
+          { stage: '设计', name: '交互设计', stakeholder: 'Kivisense' },
+          { stage: '设计', name: '视觉与内容确认', stakeholder: 'Brand & Kivisense' }
+        ],
+        '开发': [
+          { stage: '开发', name: '前后端开发', stakeholder: 'Kivisense' },
+          { stage: '开发', name: '多端适配', stakeholder: 'Kivisense' },
+          { stage: '开发', name: '数据埋点', stakeholder: 'Kivisense' }
+        ],
+        '测试': [
+          { stage: '测试', name: '内部测试', stakeholder: 'Kivisense' },
+          { stage: '测试', name: '测试报告', stakeholder: 'Kivisense' }
+        ],
+        '上线': [
+          { stage: '上线', name: '上线发布', stakeholder: 'Kivisense' }
+        ],
+        '联调': [
+          { stage: '联调', name: '系统联调', stakeholder: 'Kivisense' },
+          { stage: '联调', name: '联调问题修复与确认', stakeholder: 'Brand & Kivisense' }
+        ]
+      },
+      en: {
+        'Requirement': [
+          { stage: 'Requirement', name: 'Requirement review', stakeholder: 'Brand & Kivisense' },
+          { stage: 'Requirement', name: 'Requirement confirmation', stakeholder: 'Brand & Kivisense' }
+        ],
+        'Proposal': [
+          { stage: 'Proposal', name: 'Solution proposal', stakeholder: 'Kivisense' },
+          { stage: 'Proposal', name: 'Proposal review and confirmation', stakeholder: 'Brand & Kivisense' }
+        ],
+        'Design': [
+          { stage: 'Design', name: 'Interaction design', stakeholder: 'Kivisense' },
+          { stage: 'Design', name: 'Visual and content confirmation', stakeholder: 'Brand & Kivisense' }
+        ],
+        'Development': [
+          { stage: 'Development', name: 'Frontend and backend development', stakeholder: 'Kivisense' },
+          { stage: 'Development', name: 'Multi-device adaptation', stakeholder: 'Kivisense' },
+          { stage: 'Development', name: 'Data tracking', stakeholder: 'Kivisense' }
+        ],
+        'Testing': [
+          { stage: 'Testing', name: 'Internal testing', stakeholder: 'Kivisense' },
+          { stage: 'Testing', name: 'Test report', stakeholder: 'Kivisense' }
+        ],
+        'Launch': [
+          { stage: 'Launch', name: 'Launch release', stakeholder: 'Kivisense' }
+        ],
+        'Integration': [
+          { stage: 'Integration', name: 'System integration', stakeholder: 'Kivisense' },
+          { stage: 'Integration', name: 'Integration fixes and confirmation', stakeholder: 'Brand & Kivisense' }
+        ]
+      }
     };
-    function buildModuleTasks(keys) {
-      return keys.flatMap(key => (moduleTaskTemplates[key] || []).map(item => ({ ...item, status: 'incomplete', start: '', end: '' })));
+    function buildModuleTasks(lang, keys) {
+      const source = moduleTaskTemplates[lang] || moduleTaskTemplates.zh;
+      return keys.flatMap(key => (source[key] || []).map(item => ({ ...item, status: 'incomplete', start: '', end: '' })));
     }
-    const templates = [
-      { id: 'ar', tasks: [
-        { stage: '需求', name: '需求梳理与范围确认', stakeholder: 'Kivisense', status: 'incomplete', start: '2026-06-10', end: '2026-06-10' },
-        { stage: '内容物料', name: '内容物料收集', stakeholder: 'Brand', status: 'incomplete', start: '', end: '' },
-        { stage: '内容制作', name: '内容制作与效果确认', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' },
-        { stage: '程序开发', name: '程序开发与联调', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' },
-        { stage: 'UAT', name: 'UAT 验收测试', stakeholder: 'Brand & Kivisense', status: 'incomplete', start: '', end: '' },
-        { stage: '上线', name: '上线发布', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' }
-      ]},
-      { id: 'threed', tasks: buildModuleTasks(['需求','内容物料','内容制作','程序开发','UAT','上线']) },
-      { id: 'digital', tasks: [
-        { stage: '需求', name: '业务需求确认', stakeholder: 'Brand & Kivisense', status: 'incomplete', start: '', end: '' },
-        { stage: '配置', name: '后台配置与规则确认', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' },
-        { stage: '数据', name: '数据准备与校验', stakeholder: 'Brand', status: 'incomplete', start: '', end: '' },
-        { stage: '程序开发', name: '开发联调', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' },
-        { stage: 'UAT', name: 'UAT 验收', stakeholder: 'Brand & Kivisense', status: 'incomplete', start: '', end: '' },
-        { stage: '上线', name: '上线发布', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' }
-      ]}
-    ];
-    const quickStages = ['需求','内容物料','内容制作','程序开发','UAT','上线'];
-    const stageLabels = {
-      zh: { '需求':'需求', '设计':'设计', '内容物料':'内容物料', '内容制作':'内容制作', '程序开发':'程序开发', 'UAT':'UAT', '上线':'上线', '配置':'配置', '数据':'数据' },
-      en: { '需求':'Requirement', '设计':'Design', '内容物料':'Assets', '内容制作':'Production', '程序开发':'Development', 'UAT':'UAT', '上线':'Launch', '配置':'Setup', '数据':'Data' }
+    const templateTasks = {
+      zh: {
+        ar: [
+          { stage: '需求', name: '需求梳理与范围确认', stakeholder: 'Kivisense', status: 'incomplete', start: '2026-06-10', end: '2026-06-10' },
+          { stage: '方案', name: 'AR 方案确认', stakeholder: 'Brand & Kivisense', status: 'incomplete', start: '', end: '' },
+          { stage: '设计', name: '交互与视觉设计', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' },
+          { stage: '开发', name: '程序开发与多端适配', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' },
+          { stage: '联调', name: '系统联调与数据埋点', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' },
+          { stage: '测试', name: 'UAT 验收测试', stakeholder: 'Brand & Kivisense', status: 'incomplete', start: '', end: '' },
+          { stage: '上线', name: '上线发布', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' }
+        ],
+        threed: buildModuleTasks('zh', quickStages.zh),
+        digital: [
+          { stage: '需求', name: '业务需求确认', stakeholder: 'Brand & Kivisense', status: 'incomplete', start: '', end: '' },
+          { stage: '配置', name: '后台配置与规则确认', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' },
+          { stage: '数据', name: '数据准备与校验', stakeholder: 'Brand', status: 'incomplete', start: '', end: '' },
+          { stage: '开发', name: '开发联调', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' },
+          { stage: '联调', name: '系统联调', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' },
+          { stage: '测试', name: 'UAT 验收', stakeholder: 'Brand & Kivisense', status: 'incomplete', start: '', end: '' },
+          { stage: '上线', name: '上线发布', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' }
+        ]
+      },
+      en: {
+        ar: [
+          { stage: 'Requirement', name: 'Requirement review and scope confirmation', stakeholder: 'Kivisense', status: 'incomplete', start: '2026-06-10', end: '2026-06-10' },
+          { stage: 'Proposal', name: 'AR proposal confirmation', stakeholder: 'Brand & Kivisense', status: 'incomplete', start: '', end: '' },
+          { stage: 'Design', name: 'Interaction and visual design', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' },
+          { stage: 'Development', name: 'Development and device adaptation', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' },
+          { stage: 'Integration', name: 'System integration and data tracking', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' },
+          { stage: 'Testing', name: 'UAT acceptance testing', stakeholder: 'Brand & Kivisense', status: 'incomplete', start: '', end: '' },
+          { stage: 'Launch', name: 'Launch release', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' }
+        ],
+        threed: buildModuleTasks('en', quickStages.en),
+        digital: [
+          { stage: 'Requirement', name: 'Business requirement confirmation', stakeholder: 'Brand & Kivisense', status: 'incomplete', start: '', end: '' },
+          { stage: 'Setup', name: 'Admin setup and rule confirmation', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' },
+          { stage: 'Data', name: 'Data preparation and validation', stakeholder: 'Brand', status: 'incomplete', start: '', end: '' },
+          { stage: 'Development', name: 'Development integration', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' },
+          { stage: 'Integration', name: 'System integration', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' },
+          { stage: 'Testing', name: 'UAT acceptance', stakeholder: 'Brand & Kivisense', status: 'incomplete', start: '', end: '' },
+          { stage: 'Launch', name: 'Launch release', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' }
+        ]
+      }
     };
-    const stageReverse = Object.fromEntries(Object.entries(stageLabels.en).map(([zh,en]) => [en, zh]));
-    function stageLabel(value) { return (stageLabels[state.lang] && stageLabels[state.lang][value]) || value || ''; }
-    function stageValueFromDisplay(value) { return stageReverse[value] || value; }
+    const templates = [{ id: 'ar' }, { id: 'threed' }, { id: 'digital' }];
+    function getTemplateTasks(id) {
+      const tasksByLang = templateTasks[state.lang] || templateTasks.zh;
+      return tasksByLang[id] || tasksByLang.ar;
+    }
+    function defaultStageName() { return state.lang === 'zh' ? '未分类' : 'Uncategorized'; }
+    function normalizeStage(value) { return String(value ?? '').trim() || defaultStageName(); }
     function appPath(path) { if (!BASE_PATH) return path; return BASE_PATH + path; }
     function t(key) { return translations[state.lang][key] || key; }
     function uid() { return 'task-' + Math.random().toString(16).slice(2) + Date.now().toString(16); }
@@ -679,17 +818,89 @@ INDEX_HTML = r"""<!doctype html>
       pop.querySelectorAll('[data-date-value]').forEach(btn => btn.addEventListener('click', (event) => { event.stopPropagation(); updateTask(picker.taskId, { [picker.field]: btn.dataset.dateValue }); closeDatePicker(); }));
     }
 
-    function cloneTask(task) { return { id: uid(), stage: task.stage || '', name: task.name || '', stakeholder: task.stakeholder || 'Kivisense', status: task.status || 'incomplete', start: task.start || '', end: task.end || '' }; }
-    function applyTemplate(id) { const tpl = templates.find(x => x.id === id) || templates[0]; state.activeTemplate = tpl.id; state.tasks = tpl.tasks.map(cloneTask); renderAll(); }
-    function addTask(stage='') { state.tasks.push({ id: uid(), stage, name: stage || '', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' }); renderAll(); }
-    function addModuleTasks(stage) {
-      const items = moduleTaskTemplates[stage] || [{ stage, name: stage || '', stakeholder: 'Kivisense' }];
-      state.tasks.push(...items.map(item => ({ id: uid(), stage: item.stage || stage, name: item.name || stage, stakeholder: item.stakeholder || 'Kivisense', status: 'incomplete', start: '', end: '' })));
+    function emptyTask(stage) {
+      return { id: uid(), stage: normalizeStage(stage), name: '', stakeholder: 'Kivisense', status: 'incomplete', start: '', end: '' };
+    }
+    function cloneTask(task) {
+      return {
+        id: uid(),
+        stage: normalizeStage(task.stage || task.model),
+        name: task.name || '',
+        stakeholder: task.stakeholder || 'Kivisense',
+        status: task.status || 'incomplete',
+        start: task.start || '',
+        end: task.end || ''
+      };
+    }
+    function ensureTaskStages() {
+      if (!state.tasks.length) state.tasks.push(emptyTask(state.activeStage || defaultStageName()));
+      state.tasks.forEach(task => { task.stage = normalizeStage(task.stage); });
+    }
+    function getStageOrder() {
+      ensureTaskStages();
+      const order = [];
+      state.tasks.forEach(task => {
+        const stage = normalizeStage(task.stage);
+        task.stage = stage;
+        if (!order.includes(stage)) order.push(stage);
+      });
+      return order;
+    }
+    function getActiveStage() {
+      const stages = getStageOrder();
+      if (!state.activeStage || !stages.includes(state.activeStage)) state.activeStage = stages[0] || defaultStageName();
+      return state.activeStage;
+    }
+    function activeStageTasks() {
+      const active = getActiveStage();
+      return state.tasks.filter(task => normalizeStage(task.stage) === active);
+    }
+    function applyTemplate(id) {
+      const template = templates.find(x => x.id === id) || templates[0];
+      state.activeTemplate = template.id;
+      state.tasks = getTemplateTasks(template.id).map(cloneTask);
+      state.activeStage = state.tasks[0]?.stage || defaultStageName();
       renderAll();
     }
-    function updateTask(id, patch) { const task = state.tasks.find(x => x.id === id); if (task) Object.assign(task, patch); renderAll(false); }
+    function addTask(stage='') {
+      const targetStage = normalizeStage(stage || state.activeStage || getActiveStage());
+      state.tasks.push(emptyTask(targetStage));
+      state.activeStage = targetStage;
+      renderAll();
+    }
+    function addModuleTasks(stage) {
+      const targetStage = normalizeStage(stage);
+      const templatesForLang = moduleTaskTemplates[state.lang] || {};
+      const items = templatesForLang[targetStage] || [{ stage: targetStage, name: targetStage, stakeholder: 'Kivisense' }];
+      state.tasks.push(...items.map(item => ({ id: uid(), stage: normalizeStage(item.stage || targetStage), name: item.name || targetStage, stakeholder: item.stakeholder || 'Kivisense', status: 'incomplete', start: '', end: '' })));
+      state.activeStage = targetStage;
+      renderAll();
+    }
+    function renameActiveStage(value) {
+      const currentStage = getActiveStage();
+      const nextStage = normalizeStage(value);
+      state.tasks.forEach(task => {
+        if (normalizeStage(task.stage) === currentStage) task.stage = nextStage;
+      });
+      state.activeStage = nextStage;
+      renderAll();
+    }
+    function updateTask(id, patch) {
+      const task = state.tasks.find(x => x.id === id);
+      if (task) {
+        if (Object.prototype.hasOwnProperty.call(patch, 'stage')) patch.stage = normalizeStage(patch.stage);
+        Object.assign(task, patch);
+      }
+      renderAll(false);
+    }
     function clearDragIndicators() { document.querySelectorAll('#taskBody tr').forEach(row => row.classList.remove('drag-over-before', 'drag-over-after')); }
-    function moveTask(id, direction) { const i = state.tasks.findIndex(x => x.id === id); const j = i + direction; if (i < 0 || j < 0 || j >= state.tasks.length) return; [state.tasks[i], state.tasks[j]] = [state.tasks[j], state.tasks[i]]; renderAll(); }
+    function moveTask(id, direction) {
+      const visible = activeStageTasks();
+      const index = visible.findIndex(x => x.id === id);
+      const target = visible[index + direction];
+      if (!target) return;
+      reorderTask(id, target.id, direction < 0 ? 'before' : 'after');
+    }
     function reorderTask(dragId, targetId, position='before') {
       const from = state.tasks.findIndex(x => x.id === dragId);
       let to = state.tasks.findIndex(x => x.id === targetId);
@@ -701,7 +912,7 @@ INDEX_HTML = r"""<!doctype html>
       renderAll();
     }
     function removeTask(id) { state.tasks = state.tasks.filter(x => x.id !== id); renderAll(); }
-    function duplicateTask(id) { const i = state.tasks.findIndex(x => x.id === id); if (i < 0) return; state.tasks.splice(i + 1, 0, cloneTask(state.tasks[i])); renderAll(); }
+    function duplicateTask(id) { const i = state.tasks.findIndex(x => x.id === id); if (i < 0) return; const copy = cloneTask(state.tasks[i]); state.tasks.splice(i + 1, 0, copy); state.activeStage = copy.stage; renderAll(); }
     function statusLabel(status) { return translations[state.lang].statuses[status] || status; }
     function renderTemplates() {
       $('templateList').innerHTML = templates.map(template => {
@@ -713,20 +924,34 @@ INDEX_HTML = r"""<!doctype html>
       document.querySelectorAll('[data-template]').forEach(btn => btn.addEventListener('click', () => applyTemplate(btn.dataset.template)));
     }
     function renderQuickAdd() {
-      $('quickAdd').innerHTML = `<span class="quick-add-label">${t('quickAdd')}</span>` + quickStages.map(stage => `<button class="btn small" type="button" data-quick="${escapeHtml(stage)}">+ ${escapeHtml(stageLabel(stage))}</button>`).join('');
+      const stages = quickStages[state.lang] || quickStages.zh;
+      $('quickAdd').innerHTML = `<span class="quick-add-label">${t('quickAdd')}</span>` + stages.map(stage => `<button class="btn small" type="button" data-quick="${escapeHtml(stage)}">+ ${escapeHtml(stage)}</button>`).join('');
       document.querySelectorAll('[data-quick]').forEach(btn => btn.addEventListener('click', () => addModuleTasks(btn.dataset.quick)));
     }
+    function renderStageTabs() {
+      const stages = getStageOrder();
+      const active = getActiveStage();
+      const counts = stages.reduce((acc, stage) => {
+        acc[stage] = state.tasks.filter(task => normalizeStage(task.stage) === stage).length;
+        return acc;
+      }, {});
+      $('stageTabs').innerHTML = stages.map((stage, index) => `<button type="button" class="stage-tab ${stage === active ? 'active' : ''}" data-stage-index="${index}"><span>${escapeHtml(stage)}</span><span class="stage-tab-count">${counts[stage] || 0}</span></button>`).join('');
+      document.querySelectorAll('[data-stage-index]').forEach(btn => btn.addEventListener('click', () => {
+        state.activeStage = stages[Number(btn.dataset.stageIndex)];
+        renderAll();
+      }));
+      const input = $('stageNameInput');
+      input.value = active;
+      input.placeholder = t('stageNamePlaceholder');
+      input.onchange = () => renameActiveStage(input.value);
+      input.onkeydown = (event) => { if (event.key === 'Enter') input.blur(); };
+    }
     function renderTasks(rebind=true) {
-      const stageOrder = [];
-      state.tasks.forEach(task => { const key = task.stage || 'default'; if (!stageOrder.includes(key)) stageOrder.push(key); });
-      $('taskBody').innerHTML = state.tasks.map((task, rowIndex) => {
+      const tasks = activeStageTasks();
+      $('taskBody').innerHTML = tasks.map((task) => {
         const days = countWorkdays(task.start, task.end);
         const invalid = isInvalidRange(task);
-        const groupIndex = stageOrder.indexOf(task.stage || 'default') % 6;
-        const prev = state.tasks[rowIndex - 1];
-        const isGroupStart = rowIndex > 0 && (prev?.stage || 'default') !== (task.stage || 'default');
-        return `<tr data-id="${task.id}" class="group-${groupIndex} ${isGroupStart ? 'group-start' : ''}">
-          <td class="col-stage optional-stage"><input data-field="stage" value="${escapeHtml(stageLabel(task.stage))}" placeholder="${t('stage')}"></td>
+        return `<tr data-id="${task.id}">
           <td class="col-task"><input data-field="name" value="${escapeHtml(task.name)}" placeholder="${t('taskName')}"></td>
           <td class="col-stakeholder"><select data-field="stakeholder">${ownerOptions.map(opt => `<option value="${opt}" ${opt === task.stakeholder ? 'selected' : ''}>${escapeHtml(opt)}</option>`).join('')}</select></td>
           <td class="col-start"><button class="date-field" type="button" data-date-field="start"><span class="${task.start ? '' : 'date-placeholder'}">${task.start ? formatDate(task.start) : t('selectStart')}</span><span class="date-icon">▾</span></button></td>
@@ -737,18 +962,17 @@ INDEX_HTML = r"""<!doctype html>
         </tr>`;
       }).join('');
       applyFieldVisibility();
-      if (!rebind) bindRowEvents(); else bindRowEvents();
+      bindRowEvents();
     }
     function bindRowEvents() {
       document.querySelectorAll('#taskBody tr').forEach(row => {
         const id = row.dataset.id;
         row.querySelectorAll('input, select').forEach(input => input.addEventListener('change', () => {
-          const value = input.dataset.field === 'stage' ? stageValueFromDisplay(input.value) : input.value;
-          updateTask(id, { [input.dataset.field]: value });
+          updateTask(id, { [input.dataset.field]: input.value });
         }));
         row.querySelectorAll('input[type="text"], input:not([type])').forEach(input => input.addEventListener('input', () => {
           const task = state.tasks.find(x => x.id === id);
-          if (task) task[input.dataset.field] = input.dataset.field === 'stage' ? stageValueFromDisplay(input.value) : input.value;
+          if (task) task[input.dataset.field] = input.value;
           renderPreview();
         }));
         row.querySelectorAll('[data-date-field]').forEach(btn => btn.addEventListener('click', () => openDatePicker(id, btn.dataset.dateField, btn)));
@@ -784,7 +1008,6 @@ INDEX_HTML = r"""<!doctype html>
       });
     }
     function applyFieldVisibility() {
-      document.querySelectorAll('.optional-stage').forEach(el => el.classList.toggle('hidden', !state.showStage));
       document.querySelectorAll('.optional-status').forEach(el => el.classList.toggle('hidden', !state.showStatus));
     }
     function renderPreview() {
@@ -837,14 +1060,12 @@ INDEX_HTML = r"""<!doctype html>
       }).join('');
     }
     function renderExcel() {
-      const headers = [];
-      if (state.showStage) headers.push(t('stage'));
+      const headers = [t('stage')];
       headers.push(t('taskName'), t('stakeholder'));
       if (state.showStatus) headers.push(t('status'));
       headers.push(t('startDate'), t('endDate'), t('workdays'));
       const rows = state.tasks.map(task => {
-        const cells = [];
-        if (state.showStage) cells.push(task.stage);
+        const cells = [normalizeStage(task.stage)];
         cells.push(task.name, task.stakeholder);
         if (state.showStatus) cells.push(statusLabel(task.status));
         cells.push(formatDate(task.start), formatDate(task.end), daysLabel(countWorkdays(task.start, task.end)));
@@ -855,6 +1076,7 @@ INDEX_HTML = r"""<!doctype html>
     function validate() {
       if (!state.tasks.length) throw new Error(t('exportError'));
       state.tasks.forEach((task, index) => {
+        task.stage = normalizeStage(task.stage);
         if (!task.name.trim()) throw new Error(withReplacements(t('nameRequired'), { n: index + 1 }));
         if (!task.start || !task.end) throw new Error(withReplacements(t('dateRequired'), { n: index + 1 }));
         if (isInvalidRange(task)) throw new Error(withReplacements(t('rowDateError'), { n: index + 1 }));
@@ -879,16 +1101,15 @@ INDEX_HTML = r"""<!doctype html>
       $('projectName').value = data.project_name || '';
       state.tasks = importedTasks.map(task => ({
         id: uid(),
-        stage: task.model || task.stage || '',
+        stage: normalizeStage(task.model || task.stage),
         name: task.name || '',
         stakeholder: ownersToStakeholder(task.owners),
         status: task.status === 'done' ? 'done' : 'incomplete',
         start: task.start || '',
         end: task.end || ''
       }));
-      state.showStage = !!data.include_model;
+      state.activeStage = state.tasks[0]?.stage || defaultStageName();
       state.showStatus = !!data.include_status;
-      $('toggleStage').checked = state.showStage;
       $('toggleStatus').checked = state.showStatus;
       renderAll();
       showMessage(t('importSuccess'));
@@ -917,12 +1138,12 @@ INDEX_HTML = r"""<!doctype html>
     }
     function collectExportTasks() {
       validate();
-      return state.tasks.map(task => ({ model: task.stage, name: task.name, owners: stakeholderToOwners(task.stakeholder), status: task.status === 'done' ? 'done' : 'incomplete', start: task.start, end: task.end, workdays: countWorkdays(task.start, task.end) }));
+      return state.tasks.map(task => ({ model: normalizeStage(task.stage), name: task.name, owners: stakeholderToOwners(task.stakeholder), status: task.status === 'done' ? 'done' : 'incomplete', start: task.start, end: task.end, workdays: countWorkdays(task.start, task.end) }));
     }
     async function exportExcel() {
       try {
         const tasks = collectExportTasks();
-        const response = await fetch(appPath('/generate'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_name: $('projectName').value.trim() || 'Timeline', tasks, include_model: state.showStage, include_status: state.showStatus, language: state.lang }) });
+        const response = await fetch(appPath('/generate'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_name: $('projectName').value.trim() || 'Timeline', tasks, include_model: true, include_status: state.showStatus, language: state.lang }) });
         if (!response.ok) { const problem = await response.json().catch(() => ({ error: 'Export failed' })); throw new Error(problem.error || 'Export failed'); }
         const blob = await response.blob(); const url = URL.createObjectURL(blob);
         const safeName = ($('projectName').value || 'timeline').replace(/[\\/:*?"<>|\s]+/g, '_');
@@ -936,9 +1157,10 @@ INDEX_HTML = r"""<!doctype html>
       $('langZh').classList.toggle('active', lang === 'zh'); $('langEn').classList.toggle('active', lang === 'en');
       document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
       $('projectName').placeholder = t('projectPlaceholder');
+      $('stageNameInput').placeholder = t('stageNamePlaceholder');
       renderAll();
     }
-    function renderAll() { renderTemplates(); renderQuickAdd(); renderTasks(); renderPreview(); }
+    function renderAll() { ensureTaskStages(); renderTemplates(); renderQuickAdd(); renderStageTabs(); renderTasks(); renderPreview(); }
     function openDrawer() { renderPreview(); $('drawerBackdrop').classList.add('open'); $('previewDrawer').classList.add('open'); $('previewDrawer').setAttribute('aria-hidden', 'false'); }
     function closeDrawer() { $('drawerBackdrop').classList.remove('open'); $('previewDrawer').classList.remove('open'); $('previewDrawer').setAttribute('aria-hidden', 'true'); }
     $('langZh').addEventListener('click', () => setLanguage('zh'));
@@ -954,10 +1176,9 @@ INDEX_HTML = r"""<!doctype html>
     document.addEventListener('click', event => { if (!event.target.closest('.calendar-popover') && !event.target.closest('[data-date-field]')) closeDatePicker(); });
     window.addEventListener('resize', closeDatePicker);
     window.addEventListener('scroll', closeDatePicker, true);
-    $('toggleStage').addEventListener('change', e => { state.showStage = e.target.checked; renderAll(); });
     $('toggleStatus').addEventListener('change', e => { state.showStatus = e.target.checked; renderAll(); });
     document.querySelectorAll('[data-preview-tab]').forEach(tab => tab.addEventListener('click', () => { state.previewTab = tab.dataset.previewTab; document.querySelectorAll('[data-preview-tab]').forEach(item => item.classList.toggle('active', item === tab)); $('ganttView').classList.toggle('hidden', state.previewTab !== 'gantt'); $('excelView').classList.toggle('hidden', state.previewTab !== 'excel'); renderPreview(); }));
-    $('toggleStage').checked = state.showStage; $('toggleStatus').checked = state.showStatus; applyTemplate('ar'); setLanguage('zh');
+    $('toggleStatus').checked = state.showStatus; applyTemplate('ar'); setLanguage('zh');
   </script>
 </body>
 </html>
@@ -1235,7 +1456,7 @@ class TimelineRequestHandler(BaseHTTPRequestHandler):
                 self.send_error(404)
                 return
 
-            include_model = bool(payload.get("include_model", False))
+            include_model = True
             include_status = bool(payload.get("include_status", True))
             structured_tasks = payload.get("tasks")
             tasks = structured_tasks if structured_tasks else parse_raw_tasks(payload.get("raw_tasks", ""), include_model=include_model)
