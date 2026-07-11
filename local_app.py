@@ -10,6 +10,7 @@ import os
 import re
 import tempfile
 import webbrowser
+import xml.etree.ElementTree as ElementTree
 from datetime import date, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
@@ -17,6 +18,8 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from openpyxl import load_workbook
+from openpyxl.styles.colors import COLOR_INDEX
+from openpyxl.utils import get_column_letter
 
 from scripts.build_timeline import build_workbook
 
@@ -330,6 +333,7 @@ INDEX_HTML = r"""<!doctype html>
     .quick-add-label { flex: 0 0 auto; color: var(--muted); font-size: 12px; font-weight: 900; margin-right: 4px; }
     .quick-add .btn { flex: 0 0 auto; height: 32px; background: #fff; }
     .bar-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; }
+    .import-year { width: 146px; min-width: 0; height: 38px; }
     .drawer-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, .36); z-index: 50; opacity: 0; pointer-events: none; transition: opacity .18s ease; }
     .drawer-backdrop.open { opacity: 1; pointer-events: auto; }
     .preview-drawer { position: fixed; left: 50%; bottom: 0; transform: translate(-50%, 105%); width: min(1500px, calc(100vw - 32px)); height: min(62vh, 650px); z-index: 60; background: #fff; border: 1px solid #dbe5f3; border-bottom: 0; border-radius: 24px 24px 0 0; box-shadow: 0 -30px 80px rgba(15, 23, 42, .26); transition: transform .22s ease; overflow: hidden; display: flex; flex-direction: column; }
@@ -535,6 +539,7 @@ INDEX_HTML = r"""<!doctype html>
     <div class="quick-add" id="quickAdd"></div>
     <div class="bar-actions">
       <input id="importFile" type="file" accept=".xlsx" hidden>
+      <input id="importYear" class="import-year" type="number" min="1900" max="9999" step="1" inputmode="numeric" data-i18n-placeholder="importYearPlaceholder" aria-label="Import year">
       <button class="btn" id="importSchedule" type="button" data-i18n="importSchedule">导入排期</button>
       <button class="btn" id="addTaskButton" type="button" data-i18n="addTask">+ 新增任务</button>
       <button class="btn" id="openPreview" type="button" data-i18n="schedulePreview">排期预览</button>
@@ -579,10 +584,10 @@ INDEX_HTML = r"""<!doctype html>
         taskTableTitle: '任务排期表格', taskTableDesc: '',
         addTask: '+ 新增任务', reset: '重置', stage: '阶段', taskName: '任务', stakeholder: '负责人', status: '状态', startDate: '开始日期', endDate: '结束日期', workdays: '工作日', actions: '操作',
         templatesTitle: '排期模版', templatesDesc: '内置模板不会因为清空缓存丢失；套用后只修改当前任务。', fieldOptionsTitle: '可选展示字段', fieldOptionsDesc: '阶段始终展示并导出；这里仅控制状态列。',
-        schedulePreview: '排期预览', ganttView: '甘特图', excelView: '表格', exportExcel: '导出 Excel', importSchedule: '导入排期', quickAdd: '快捷添加',
+        schedulePreview: '排期预览', ganttView: '甘特图', excelView: '表格', exportExcel: '导出 Excel', importSchedule: '导入排期', importYearPlaceholder: '导入年份（可选）', importPreview: '导入预览', importSheet: '工作表', importYear: '年份', importMonthRange: '月份范围', importDateRange: '日期范围', importTaskCount: '任务数量', importValidTaskCount: '成功识别日期的任务', importConfirm: '确认导入这些任务？', quickAdd: '快捷添加',
         currentStage: '当前阶段', stageNamePlaceholder: '阶段名称',
         stageCount: '阶段数量', totalWorkweeks: '总工作周', totalWorkdays: '总工作日', riskItems: '风险项', unnamed: '', empty: '请添加任务并填写日期后查看排期。', invalidDate: '日期错误',
-        generated: 'Timeline 已生成，你可以导出 Excel 给团队使用。', importSuccess: '排期已导入，你可以继续编辑或导出 Excel。', importError: '无法识别这个排期文件，请确认它使用了标准导出模板。', exportError: '请至少添加一个任务，并填写开始日期和结束日期。', rowDateError: '第 {n} 行结束日期不能早于开始日期。', nameRequired: '第 {n} 行缺少任务名称。', dateRequired: '第 {n} 行缺少开始日期或结束日期。',
+        generated: 'Timeline 已生成，你可以导出 Excel 给团队使用。', importSuccess: '排期已导入，你可以继续编辑或导出 Excel。', importError: '无法识别这个排期文件，请检查日期轴、月份标题和任务条背景色。', exportError: '请至少添加一个任务，并填写开始日期和结束日期。', rowDateError: '第 {n} 行结束日期不能早于开始日期。', nameRequired: '第 {n} 行缺少任务名称。', dateRequired: '第 {n} 行缺少开始日期或结束日期。',
         daysUnit: '{n} 天', oneDay: '1 天',
         statuses: { incomplete: '未完成', done: '已完成' },
         selectStart: '选择开始日期', selectEnd: '选择结束日期', today: '今天', clearDate: '清空', previewTaskColumn: '任务 / 事项',
@@ -593,10 +598,10 @@ INDEX_HTML = r"""<!doctype html>
         taskTableTitle: 'Schedule Table', taskTableDesc: '',
         addTask: '+ Add task', reset: 'Reset', stage: 'Stage', taskName: 'Task', stakeholder: 'Owner', status: 'Status', startDate: 'Start Date', endDate: 'End Date', workdays: 'Workdays', actions: 'Actions',
         templatesTitle: 'Schedule Templates', templatesDesc: 'Built-in templates do not depend on browser cache. Applying one only edits current tasks.', fieldOptionsTitle: 'Optional Fields', fieldOptionsDesc: 'Stage is always shown and exported. This only controls Status.',
-        schedulePreview: 'Schedule Preview', ganttView: 'Gantt', excelView: 'Table', exportExcel: 'Export Excel', importSchedule: 'Import Schedule', quickAdd: 'Quick add',
+        schedulePreview: 'Schedule Preview', ganttView: 'Gantt', excelView: 'Table', exportExcel: 'Export Excel', importSchedule: 'Import Schedule', importYearPlaceholder: 'Import year (optional)', importPreview: 'Import preview', importSheet: 'Sheet', importYear: 'Year', importMonthRange: 'Months', importDateRange: 'Date range', importTaskCount: 'Tasks', importValidTaskCount: 'Tasks with dates', importConfirm: 'Import these tasks?', quickAdd: 'Quick add',
         currentStage: 'Current Stage', stageNamePlaceholder: 'Stage name',
         stageCount: 'Stages', totalWorkweeks: 'Work Weeks', totalWorkdays: 'Workdays', riskItems: 'Risks', unnamed: '', empty: 'Add tasks and dates to preview the schedule.', invalidDate: 'Date error',
-        generated: 'Timeline generated. You can export Excel for your team.', importSuccess: 'Schedule imported. You can keep editing or export Excel.', importError: 'Unable to read this schedule. Please use the standard exported template.', exportError: 'Please add at least one task with start and end dates.', rowDateError: 'Row {n}: end date cannot be earlier than start date.', nameRequired: 'Row {n} is missing a task name.', dateRequired: 'Row {n} is missing a start or end date.',
+        generated: 'Timeline generated. You can export Excel for your team.', importSuccess: 'Schedule imported. You can keep editing or export Excel.', importError: 'Unable to read this schedule. Check the date axis, month headers, and task-bar fills.', exportError: 'Please add at least one task with start and end dates.', rowDateError: 'Row {n}: end date cannot be earlier than start date.', nameRequired: 'Row {n} is missing a task name.', dateRequired: 'Row {n} is missing a start or end date.',
         daysUnit: '{n} days', oneDay: '1 day',
         statuses: { incomplete: 'Incomplete', done: 'Done' },
         selectStart: 'Select start date', selectEnd: 'Select end date', today: 'Today', clearDate: 'Clear', previewTaskColumn: 'Task',
@@ -1116,6 +1121,24 @@ INDEX_HTML = r"""<!doctype html>
       renderAll();
       showMessage(t('importSuccess'));
     }
+    function formatImportPreview(data) {
+      const preview = data.import_preview || {};
+      const inferredYear = preview.year_inferred
+        ? (state.lang === 'zh' ? `（推断，来源：${preview.inferred_year_source}，需确认）` : ` (inferred from ${preview.inferred_year_source}; confirm)`)
+        : '';
+      const lines = [
+        t('importPreview'),
+        `${t('importSheet')}: ${preview.sheet || ''}`,
+        `${t('importYear')}: ${preview.year || ''}${inferredYear}`,
+        `${t('importMonthRange')}: ${(preview.months || []).join(', ')}`,
+        `${t('importDateRange')}: ${preview.date_range || ''}`,
+        `${t('importTaskCount')}: ${preview.task_count || 0}`,
+        `${t('importValidTaskCount')}: ${preview.valid_date_task_count || 0}`
+      ];
+      (preview.warnings || []).forEach(warning => lines.push(`- ${warning}`));
+      lines.push('', t('importConfirm'));
+      return lines.join('\n');
+    }
     function fileToBase64(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -1128,9 +1151,11 @@ INDEX_HTML = r"""<!doctype html>
       if (!file) return;
       try {
         const file_b64 = await fileToBase64(file);
-        const response = await fetch(appPath('/import'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename: file.name, file_b64 }) });
+        const importYear = $('importYear').value.trim();
+        const response = await fetch(appPath('/import'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename: file.name, file_b64, import_year: importYear || null }) });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.error || t('importError'));
+        if (!window.confirm(formatImportPreview(data))) return;
         applyImportedSchedule(data);
       } catch (err) {
         showMessage(err.message || t('importError'), 'error');
@@ -1158,6 +1183,7 @@ INDEX_HTML = r"""<!doctype html>
       document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
       $('langZh').classList.toggle('active', lang === 'zh'); $('langEn').classList.toggle('active', lang === 'en');
       document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+      document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
       $('projectName').placeholder = t('projectPlaceholder');
       $('stageNameInput').placeholder = t('stageNamePlaceholder');
       renderAll();
@@ -1209,6 +1235,12 @@ def month_from_label(value) -> int | None:
     if zh_match:
         month = int(zh_match.group(1))
         return month if 1 <= month <= 12 else None
+    zh_months = {
+        "一月": 1, "二月": 2, "三月": 3, "四月": 4, "五月": 5, "六月": 6,
+        "七月": 7, "八月": 8, "九月": 9, "十月": 10, "十一月": 11, "十二月": 12,
+    }
+    if text in zh_months:
+        return zh_months[text]
     numeric = re.fullmatch(r"\d{1,2}", text)
     if numeric:
         month = int(text)
@@ -1222,6 +1254,29 @@ def month_from_label(value) -> int | None:
     return months.get(text)
 
 
+class ScheduleImportError(ValueError):
+    """A user-facing import error with stable details for the HTTP API."""
+
+    def __init__(self, code: str, message: str, details: dict | None = None):
+        super().__init__(message)
+        self.code = code
+        self.details = details or {}
+
+
+HEADER_ALIASES = {
+    "model": {"model", "工作内容", "阶段", "stage", "group", "分组"},
+    "description": {"description", "事项", "任务", "task", "task name", "任务名称"},
+    "kivisense": {"kivisense", "弥知科技", "我方"},
+    "brands": {"brands", "brand", "品牌方", "客户", "客户方"},
+    "status": {"status", "状态"},
+}
+DEFAULT_FILL_COLORS = {"FFFFFF", "000000", "D9D9D9", "EDEDED", "F2F2F2", "F5F5F5"}
+MONTH_NAMES = {
+    1: "January", 2: "February", 3: "March", 4: "April", 5: "May", 6: "June",
+    7: "July", 8: "August", 9: "September", 10: "October", 11: "November", 12: "December",
+}
+
+
 def get_merged_value(ws, row: int, col: int):
     value = ws.cell(row, col).value
     if value is not None:
@@ -1232,16 +1287,259 @@ def get_merged_value(ws, row: int, col: int):
     return None
 
 
-def is_timeline_fill(cell) -> bool:
+def expand_merged_headers(ws, row: int, start_col: int, end_col: int) -> dict[int, object]:
+    """Return one header value per column, expanding horizontal merged ranges."""
+    values = {col: ws.cell(row, col).value for col in range(start_col, end_col + 1)}
+    for merged in ws.merged_cells.ranges:
+        if not (merged.min_row <= row <= merged.max_row):
+            continue
+        anchor_value = ws.cell(merged.min_row, merged.min_col).value
+        for col in range(max(start_col, merged.min_col), min(end_col, merged.max_col) + 1):
+            if values[col] is None:
+                values[col] = anchor_value
+    return values
+
+
+def _day_number(value) -> int | None:
+    """Accept literal day labels only; never treat an Excel serial as a date."""
+    if isinstance(value, bool) or isinstance(value, (date, datetime)):
+        return None
+    try:
+        if isinstance(value, str) and not re.fullmatch(r"\s*\d{1,2}\s*", value):
+            return None
+        number = int(value)
+        if float(value) != number:
+            return None
+    except (TypeError, ValueError):
+        return None
+    return number if 1 <= number <= 31 else None
+
+
+def _longest_contiguous_run(columns: list[int]) -> list[int]:
+    if not columns:
+        return []
+    runs: list[list[int]] = []
+    current = [columns[0]]
+    for col in columns[1:]:
+        if col == current[-1] + 1:
+            current.append(col)
+        else:
+            runs.append(current)
+            current = [col]
+    runs.append(current)
+    return max(runs, key=len)
+
+
+def _header_key(value) -> str | None:
+    text = cell_text(value).lower()
+    for key, aliases in HEADER_ALIASES.items():
+        if text in aliases:
+            return key
+    return None
+
+
+def _find_task_name_column(ws, start_row: int, end_row: int, before_col: int) -> int | None:
+    candidates: list[tuple[int, int]] = []
+    for col in range(1, before_col):
+        count = sum(bool(cell_text(ws.cell(row, col).value)) for row in range(start_row, end_row + 1))
+        if count:
+            candidates.append((count, col))
+    return max(candidates)[1] if candidates else None
+
+
+def detect_header_rows(ws) -> dict:
+    """Locate the day-number row in the first 20 rows of a visual Gantt sheet."""
+    candidates: list[tuple[int, int, list[int]]] = []
+    for row in range(1, min(ws.max_row, 20) + 1):
+        day_columns = [col for col in range(1, ws.max_column + 1) if _day_number(ws.cell(row, col).value)]
+        run = _longest_contiguous_run(day_columns)
+        if len(run) >= 4:
+            candidates.append((len(run), row, run))
+    if not candidates:
+        raise ScheduleImportError("DATE_ROW_NOT_FOUND", "找不到包含日期数字的甘特图时间轴。")
+    longest = max(candidate[0] for candidate in candidates)
+    best_candidates = [candidate for candidate in candidates if candidate[0] == longest]
+    if len(best_candidates) > 1:
+        raise ScheduleImportError(
+            "AMBIGUOUS_TIMELINE",
+            "检测到多个可能的日期时间轴，无法安全导入。",
+            {"rows": [candidate[1] for candidate in best_candidates]},
+        )
+    _, date_row, date_columns = best_candidates[0]
+    return {
+        "date_row": date_row,
+        "month_row": date_row - 1 if date_row > 1 else None,
+        "field_header_row": date_row - 1 if date_row > 1 else None,
+        "date_columns": date_columns,
+    }
+
+
+def detect_gantt_layout(ws) -> dict:
+    """Detect a table-plus-timeline layout without binding it to fixed coordinates."""
+    headers = detect_header_rows(ws)
+    date_start_col = headers["date_columns"][0]
+    date_end_col = headers["date_columns"][-1]
+    header_map: dict[str, int] = {}
+    header_row = headers["field_header_row"]
+    if header_row:
+        for col in range(1, date_start_col):
+            key = _header_key(get_merged_value(ws, header_row, col))
+            if key and key not in header_map:
+                header_map[key] = col
+    if "description" not in header_map:
+        fallback = _find_task_name_column(ws, headers["date_row"] + 1, ws.max_row, date_start_col)
+        if fallback:
+            header_map["description"] = fallback
+    if "description" not in header_map:
+        raise ScheduleImportError("TASK_COLUMN_NOT_FOUND", "找不到任务名称列，无法识别甘特图任务。")
+    return {
+        **headers,
+        "date_start_col": date_start_col,
+        "date_end_col": date_end_col,
+        "task_start_row": headers["date_row"] + 1,
+        "header_map": header_map,
+    }
+
+
+def _increment_month(month: int) -> int:
+    return 1 if month == 12 else month + 1
+
+
+def _decrement_month(month: int) -> int:
+    return 12 if month == 1 else month - 1
+
+
+def build_timeline_date_map(ws, layout: dict, import_year: int) -> dict:
+    """Map physical timeline columns to date-only values without adding skipped days."""
+    columns = list(range(layout["date_start_col"], layout["date_end_col"] + 1))
+    date_row = layout["date_row"]
+    days = {col: _day_number(ws.cell(date_row, col).value) for col in columns}
+    if any(days[col] is None for col in columns):
+        raise ScheduleImportError("TIMELINE_GAP", "日期时间轴列必须连续且每列都包含 1 到 31 的日期数字。")
+
+    month_headers = expand_merged_headers(ws, layout["month_row"], columns[0], columns[-1])
+    months = {col: month_from_label(month_headers[col]) for col in columns}
+    explicit_months = {col for col, month in months.items() if month is not None}
+    if not explicit_months:
+        raise ScheduleImportError("MONTH_NOT_FOUND", "找不到月份标题，无法建立日期时间轴。")
+
+    # Fill forward from an explicit month. A lower day number means the timeline crossed a month boundary.
+    previous_col = None
+    for col in columns:
+        if months[col] is None and previous_col is not None:
+            months[col] = months[previous_col]
+            if days[col] < days[previous_col]:
+                months[col] = _increment_month(months[col])
+        if months[col] is not None:
+            previous_col = col
+
+    # A leading blank merged header (July in the supplied workbook) is inferred from the next known month.
+    first_known_index = next(index for index, col in enumerate(columns) if months[col] is not None)
+    for index in range(first_known_index - 1, -1, -1):
+        col = columns[index]
+        next_col = columns[index + 1]
+        months[col] = months[next_col]
+        if days[col] > days[next_col]:
+            months[col] = _decrement_month(months[col])
+
+    if any(months[col] is None for col in columns):
+        raise ScheduleImportError("MONTH_NOT_FOUND", "月份标题不完整，且无法根据相邻日期推断。")
+
+    dates_by_column: dict[int, date] = {}
+    previous_date: date | None = None
+    previous_month: int | None = None
+    year_offset = 0
+    for col in columns:
+        month = months[col]
+        if previous_month is not None and month < previous_month:
+            year_offset += 1
+        try:
+            current_date = date(import_year + year_offset, month, days[col])
+        except ValueError as exc:
+            raise ScheduleImportError(
+                "INVALID_DAY", f"{get_column_letter(col)} 列的日期无效。", {"column": get_column_letter(col), "day": days[col], "month": month}
+            ) from exc
+        if previous_date is not None and current_date <= previous_date:
+            raise ScheduleImportError(
+                "TIMELINE_NOT_INCREASING",
+                "日期时间轴必须从左到右严格递增。",
+                {"column": get_column_letter(col), "date": current_date.isoformat(), "previous_date": previous_date.isoformat()},
+            )
+        dates_by_column[col] = current_date
+        previous_date = current_date
+        previous_month = month
+
+    inferred_months = sorted({months[col] for col in columns if col not in explicit_months})
+    return {
+        "dates_by_column": dates_by_column,
+        "column_date_map": {get_column_letter(col): value.isoformat() for col, value in dates_by_column.items()},
+        "inferred_months": [MONTH_NAMES[month] for month in inferred_months],
+        "months": [MONTH_NAMES[month] for month in sorted(set(months.values()))],
+    }
+
+
+def _normalize_rgb(value) -> str | None:
+    text = str(value or "").upper().lstrip("#")
+    if not re.fullmatch(r"[0-9A-F]{6,8}", text):
+        return None
+    if len(text) == 8:
+        text = text[-6:]
+    return None if text in DEFAULT_FILL_COLORS else text
+
+
+def _apply_tint(rgb: str, tint: float) -> str:
+    channels = [int(rgb[index : index + 2], 16) for index in range(0, 6, 2)]
+    if tint < 0:
+        channels = [round(channel * (1 + tint)) for channel in channels]
+    else:
+        channels = [round(channel + (255 - channel) * tint) for channel in channels]
+    return "".join(f"{max(0, min(255, channel)):02X}" for channel in channels)
+
+
+def _resolve_theme_color(cell, theme: int, tint: float) -> str | None:
+    """Resolve an OOXML theme colour to RGB when the workbook carries its theme XML."""
+    try:
+        workbook = cell.parent.parent
+        theme_xml = workbook.loaded_theme
+        root = ElementTree.fromstring(theme_xml)
+        namespace = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+        scheme = root.find(f".//{namespace}clrScheme")
+        if scheme is None or not 0 <= theme < len(scheme):
+            return None
+        color_node = list(scheme)[theme][0]
+        rgb = color_node.attrib.get("lastClr") or color_node.attrib.get("val")
+        if not rgb or not re.fullmatch(r"[0-9A-Fa-f]{6}", rgb):
+            return None
+        return _normalize_rgb(_apply_tint(rgb.upper(), tint))
+    except (AttributeError, ElementTree.ParseError, IndexError, TypeError, ValueError):
+        return None
+
+
+def normalize_cell_fill(cell) -> str | None:
+    """Normalize RGB, ARGB, theme and indexed solid fills; ignore default backgrounds."""
     fill = cell.fill
-    if not fill or fill.fill_type != "solid":
-        return False
-    color = getattr(fill.fgColor, "rgb", None)
-    if not color:
-        return False
-    color = str(color).upper().replace("FF", "", 1) if str(color).upper().startswith("FF") else str(color).upper()
-    color = color[-6:]
-    return color not in {"FFFFFF", "000000", "D9D9D9", "EDEDED", "F2F2F2", "F5F5F5"}
+    if not fill or (fill.fill_type or getattr(fill, "patternType", None)) != "solid":
+        return None
+    color = fill.fgColor
+    color_type = getattr(color, "type", None)
+    if color_type == "rgb":
+        return _normalize_rgb(color.rgb)
+    if color_type == "indexed":
+        index = getattr(color, "indexed", None)
+        if not isinstance(index, int) or index in {64, 65} or not 0 <= index < len(COLOR_INDEX):
+            return None
+        return _normalize_rgb(COLOR_INDEX[index])
+    if color_type == "theme":
+        theme = getattr(color, "theme", None)
+        if theme in {None, 0, 1}:
+            return None
+        tint = float(getattr(color, "tint", 0) or 0)
+        return _resolve_theme_color(cell, theme, tint) or f"theme:{theme}:{tint}"
+    return None
+
+
+def is_timeline_fill(cell) -> bool:
+    return normalize_cell_fill(cell) is not None
 
 
 def normalize_import_status(value) -> str:
@@ -1251,83 +1549,101 @@ def normalize_import_status(value) -> str:
     return "incomplete"
 
 
-def infer_project_year(months: list[int]) -> int:
-    # Exported templates contain month/day but no year. Use current year, and increment when months wrap.
-    return datetime.now().year
+def _explicit_year_from_sheet(ws) -> int | None:
+    for row in ws.iter_rows():
+        for cell in row:
+            match = re.search(r"(?<!\d)(20\d{2})(?!\d)", cell_text(cell.value))
+            if match:
+                return int(match.group(1))
+    return None
 
 
-def parse_imported_workbook(file_bytes: bytes) -> dict:
-    wb = load_workbook(BytesIO(file_bytes), data_only=True)
-    ws = wb.active
+def _year_from_filename(filename: str) -> int | None:
+    match = re.search(r"(?<!\d)(20\d{2})(?!\d)", filename or "")
+    return int(match.group(1)) if match else None
 
-    header_row = None
-    desc_col = None
-    for row in range(1, min(ws.max_row, 18) + 1):
-        for col in range(1, min(ws.max_column, 12) + 1):
-            text = cell_text(ws.cell(row, col).value).lower()
-            if text in {"description", "事项", "任务", "task", "task name"}:
-                header_row = row
-                desc_col = col
-                break
-        if header_row:
-            break
-    if not header_row or not desc_col:
-        raise ValueError("无法识别排期模板表头，请使用系统导出的 Excel 模板。")
 
-    day_row = header_row + 1
-    header_map: dict[str, int] = {}
-    for col in range(1, min(ws.max_column, 20) + 1):
-        text = cell_text(get_merged_value(ws, header_row, col)).lower()
-        if text in {"model", "工作内容", "阶段", "stage"}:
-            header_map["model"] = col
-        elif text in {"description", "事项", "任务", "task", "task name"}:
-            header_map["description"] = col
-        elif text in {"kivisense", "弥知科技", "我方"}:
-            header_map["kivisense"] = col
-        elif text in {"brands", "brand", "品牌方", "客户", "客户方"}:
-            header_map["brands"] = col
-        elif text in {"status", "状态"}:
-            header_map["status"] = col
+def _validated_import_year(value) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        year = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ScheduleImportError("INVALID_IMPORT_YEAR", "导入年份必须是四位数字。") from exc
+    if not 1900 <= year <= 9999:
+        raise ScheduleImportError("INVALID_IMPORT_YEAR", "导入年份必须介于 1900 和 9999 之间。")
+    return year
 
-    if "description" not in header_map:
-        header_map["description"] = desc_col
-    fixed_cols = [c for c in header_map.values() if c]
-    date_start_col = max(fixed_cols) + 1
 
-    date_cols: dict[int, date] = {}
-    year = infer_project_year([])
-    last_month = None
-    year_offset = 0
-    for col in range(date_start_col, ws.max_column + 1):
-        day_value = ws.cell(day_row, col).value
-        try:
-            day_int = int(day_value)
-        except (TypeError, ValueError):
-            continue
-        month = month_from_label(get_merged_value(ws, header_row, col))
-        if not month:
-            continue
-        if last_month is not None and month < last_month:
-            year_offset += 1
-        last_month = month
-        try:
-            date_cols[col] = date(year + year_offset, month, day_int)
-        except ValueError:
-            continue
-    if not date_cols:
-        raise ValueError("无法识别日期横轴，请使用系统导出的 Excel 模板。")
+def resolve_import_year(wb, ws, import_year: int | str | None, filename: str = "") -> dict:
+    selected_year = _validated_import_year(import_year)
+    if selected_year:
+        return {"year": selected_year, "year_inferred": False, "source": "user-input", "requires_confirmation": False}
+    sheet_year = _explicit_year_from_sheet(ws)
+    if sheet_year:
+        return {"year": sheet_year, "year_inferred": False, "source": "worksheet", "requires_confirmation": False}
+    filename_year = _year_from_filename(filename)
+    if filename_year:
+        return {"year": filename_year, "year_inferred": True, "source": "filename", "requires_confirmation": True}
+    for attribute, source in (("created", "workbook-created-time"), ("modified", "workbook-modified-time")):
+        value = getattr(wb.properties, attribute, None)
+        if isinstance(value, (date, datetime)) and 1900 <= value.year <= 9999:
+            return {"year": value.year, "year_inferred": True, "source": source, "requires_confirmation": True}
+    raise ScheduleImportError("YEAR_REQUIRED", "源文件未明确包含年份，请在导入前填写年份后重试。")
 
-    project_name = cell_text(ws.cell(1, 2).value) or cell_text(ws.cell(1, 1).value)
+
+def extract_task_segments(ws, row: int, dates_by_column: dict[int, date]) -> dict:
+    """Read colored Gantt cells as contiguous physical-column segments."""
+    filled_columns = [col for col in sorted(dates_by_column) if normalize_cell_fill(ws.cell(row, col))]
+    segments: list[dict] = []
+    if filled_columns:
+        run_start = filled_columns[0]
+        previous_col = filled_columns[0]
+        for col in filled_columns[1:] + [None]:
+            if col is not None and col == previous_col + 1:
+                previous_col = col
+                continue
+            start = dates_by_column[run_start]
+            end = dates_by_column[previous_col]
+            segments.append({
+                "startDate": start.isoformat(),
+                "endDate": end.isoformat(),
+                "workingDays": previous_col - run_start + 1,
+                "startColumn": get_column_letter(run_start),
+                "endColumn": get_column_letter(previous_col),
+            })
+            if col is not None:
+                run_start = col
+                previous_col = col
+    return {"filled_columns": filled_columns, "segments": segments}
+
+
+def _project_name_from_sheet(ws) -> str:
+    for row in range(1, min(ws.max_row, 2) + 1):
+        for col in range(1, min(ws.max_column, 8) + 1):
+            value = cell_text(get_merged_value(ws, row, col))
+            if value:
+                return value
+    return ws.title
+
+
+def parse_gantt_worksheet(ws, import_year: int) -> dict:
+    """Parse a visual Gantt worksheet into the existing task model plus import metadata."""
+    layout = detect_gantt_layout(ws)
+    timeline = build_timeline_date_map(ws, layout, import_year)
+    dates_by_column = timeline["dates_by_column"]
+    header_map = layout["header_map"]
     tasks: list[dict] = []
+    warnings: list[str] = []
     current_model = ""
     model_col = header_map.get("model")
-    desc_col = header_map["description"]
+    description_col = header_map["description"]
     kivisense_col = header_map.get("kivisense")
     brands_col = header_map.get("brands")
     status_col = header_map.get("status")
 
-    for row in range(day_row + 1, ws.max_row + 1):
-        name = cell_text(ws.cell(row, desc_col).value)
+    for row in range(layout["task_start_row"], ws.max_row + 1):
+        name = cell_text(ws.cell(row, description_col).value)
         if not name:
             continue
         if model_col:
@@ -1335,34 +1651,138 @@ def parse_imported_workbook(file_bytes: bytes) -> dict:
             if model_value:
                 current_model = model_value
         owners = []
-        if kivisense_col and cell_text(ws.cell(row, kivisense_col).value):
+        kivisense_value = cell_text(ws.cell(row, kivisense_col).value) if kivisense_col else ""
+        brands_value = cell_text(ws.cell(row, brands_col).value) if brands_col else ""
+        if kivisense_value:
             owners.append("Kivisense")
-        if brands_col and cell_text(ws.cell(row, brands_col).value):
+        if brands_value:
             owners.append("Brands")
         if not owners:
             owners.append("Kivisense")
 
-        filled_cols = [col for col in sorted(date_cols) if is_timeline_fill(ws.cell(row, col))]
-        start = date_cols[filled_cols[0]].isoformat() if filled_cols else ""
-        end = date_cols[filled_cols[-1]].isoformat() if filled_cols else ""
-        status = normalize_import_status(ws.cell(row, status_col).value) if status_col else "incomplete"
+        extracted = extract_task_segments(ws, row, dates_by_column)
+        filled_columns = extracted["filled_columns"]
+        task_warnings: list[str] = []
+        if not filled_columns:
+            task_warnings.append("任务行没有可识别的甘特图背景色。")
+            warnings.append(f"第 {row} 行“{name}”没有可识别的日期。")
+            start = end = ""
+            duration_calendar_days = 0
+        else:
+            start_date = dates_by_column[filled_columns[0]]
+            end_date = dates_by_column[filled_columns[-1]]
+            start = start_date.isoformat()
+            end = end_date.isoformat()
+            duration_calendar_days = (end_date - start_date).days + 1
+        source = {
+            "sheet": ws.title,
+            "row": row,
+            "startColumn": get_column_letter(filled_columns[0]) if filled_columns else None,
+            "endColumn": get_column_letter(filled_columns[-1]) if filled_columns else None,
+        }
         tasks.append({
             "model": current_model,
+            "group": current_model,
             "name": name,
+            "taskName": name,
+            "kivisense": kivisense_value or None,
+            "brands": brands_value or None,
             "owners": owners,
-            "status": status,
+            "status": normalize_import_status(ws.cell(row, status_col).value) if status_col else "incomplete",
             "start": start,
             "end": end,
+            "startDate": start,
+            "endDate": end,
+            "durationWorkingDays": len(filled_columns),
+            "durationCalendarDays": duration_calendar_days,
+            "segments": extracted["segments"],
+            "source": source,
+            "warnings": task_warnings,
         })
 
     if not tasks:
-        raise ValueError("未在模板中识别到任何排期事项。")
+        raise ScheduleImportError("TASKS_NOT_FOUND", "未在甘特图中识别到任何任务名称。")
     return {
-        "project_name": project_name,
+        "project_name": _project_name_from_sheet(ws),
         "tasks": tasks,
         "include_model": bool(model_col),
         "include_status": bool(status_col),
+        "layout": layout,
+        "timeline": timeline,
+        "warnings": warnings,
     }
+
+
+def validate_imported_schedule(parsed: dict) -> dict:
+    """Validate date-only task data and return a compact preview summary."""
+    valid_tasks = []
+    for task in parsed["tasks"]:
+        start = task.get("start", "")
+        end = task.get("end", "")
+        if not start or not end:
+            continue
+        try:
+            start_date = date.fromisoformat(start)
+            end_date = date.fromisoformat(end)
+        except ValueError as exc:
+            raise ScheduleImportError("INVALID_TASK_DATE", f"任务“{task['name']}”包含无效日期。") from exc
+        if end_date < start_date:
+            raise ScheduleImportError("INVALID_TASK_RANGE", f"任务“{task['name']}”的结束日期早于开始日期。")
+        valid_tasks.append(task)
+    if not valid_tasks:
+        raise ScheduleImportError("TASK_DATES_NOT_FOUND", "没有识别到带有效日期的任务，请检查甘特图填充色和日期轴。")
+    return {
+        "task_count": len(parsed["tasks"]),
+        "valid_date_task_count": len(valid_tasks),
+        "task_date_range": f"{min(task['start'] for task in valid_tasks)} 至 {max(task['end'] for task in valid_tasks)}",
+    }
+
+
+def parse_imported_workbook(file_bytes: bytes, filename: str = "", import_year: int | str | None = None) -> dict:
+    wb = load_workbook(BytesIO(file_bytes), data_only=True)
+    errors: list[ScheduleImportError] = []
+    for ws in wb.worksheets:
+        try:
+            year_resolution = resolve_import_year(wb, ws, import_year, filename)
+            parsed = parse_gantt_worksheet(ws, year_resolution["year"])
+            validation = validate_imported_schedule(parsed)
+        except ScheduleImportError as exc:
+            errors.append(exc)
+            continue
+
+        warnings = list(parsed["warnings"])
+        if parsed["timeline"]["inferred_months"]:
+            warnings.append(f"已根据相邻月份和日期回绕推断：{', '.join(parsed['timeline']['inferred_months'])}。")
+        if year_resolution["year_inferred"]:
+            warnings.append(f"源文件未明确存储年份，当前按 {year_resolution['year']} 年解析，请确认。")
+        column_dates = list(parsed["timeline"]["column_date_map"].values())
+        return {
+            "project_name": parsed["project_name"],
+            "tasks": parsed["tasks"],
+            "include_model": parsed["include_model"],
+            "include_status": parsed["include_status"],
+            "yearInferred": year_resolution["year_inferred"],
+            "inferredYearSource": year_resolution["source"],
+            "requires_year_confirmation": year_resolution["requires_confirmation"],
+            "warnings": warnings,
+            "import_preview": {
+                "sheet": ws.title,
+                "year": year_resolution["year"],
+                "year_inferred": year_resolution["year_inferred"],
+                "inferred_year_source": year_resolution["source"],
+                "months": parsed["timeline"]["months"],
+                "inferred_months": parsed["timeline"]["inferred_months"],
+                "column_date_map": parsed["timeline"]["column_date_map"],
+                "date_range": f"{column_dates[0]} 至 {column_dates[-1]}",
+                "task_date_range": validation["task_date_range"],
+                "task_count": validation["task_count"],
+                "valid_date_task_count": validation["valid_date_task_count"],
+                "warnings": warnings,
+            },
+        }
+    if errors:
+        raise errors[0]
+    raise ScheduleImportError("WORKSHEET_NOT_FOUND", "工作簿中没有可识别的排期工作表。")
 
 
 def parse_raw_tasks(raw_text: str, include_model: bool = False) -> list[dict]:
@@ -1450,7 +1870,11 @@ class TimelineRequestHandler(BaseHTTPRequestHandler):
                 if not file_b64:
                     raise ValueError("请先选择一个 .xlsx 排期文件。")
                 file_bytes = base64.b64decode(file_b64)
-                imported = parse_imported_workbook(file_bytes)
+                imported = parse_imported_workbook(
+                    file_bytes,
+                    filename=payload.get("filename") or "",
+                    import_year=payload.get("import_year"),
+                )
                 self.respond_json(imported)
                 return
 
@@ -1480,6 +1904,8 @@ class TimelineRequestHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+        except ScheduleImportError as exc:
+            self.respond_json({"error": str(exc), "code": exc.code, "details": exc.details}, status=400)
         except Exception as exc:
             self.respond_json({"error": str(exc)}, status=400)
 

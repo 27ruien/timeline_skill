@@ -1,4 +1,5 @@
 *.xlsx
+!tests/fixtures/CHAGEE_AR_Campaign_Timeline.xlsx
 __pycache__/
 *.pyc
 .venv/
