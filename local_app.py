@@ -210,6 +210,11 @@ INDEX_HTML = r"""<!doctype html>
     }
     .stage-tab:hover { border-color: #b7ccff; background: var(--primary-soft); color: var(--primary); }
     .stage-tab.active { background: #111827; border-color: #111827; color: #fff; box-shadow: 0 10px 22px rgba(15, 23, 42, .16); }
+    .stage-tab[draggable="true"] { cursor: grab; user-select: none; }
+    .stage-tab[draggable="true"]:active { cursor: grabbing; }
+    .stage-tab.stage-dragging { opacity: .5; }
+    .stage-tab.stage-drag-over-before { box-shadow: inset 3px 0 0 var(--primary); }
+    .stage-tab.stage-drag-over-after { box-shadow: inset -3px 0 0 var(--primary); }
     .stage-tab-count {
       min-width: 22px;
       height: 22px;
@@ -577,14 +582,14 @@ INDEX_HTML = r"""<!doctype html>
   <script>
     const BASE_PATH = __BASE_PATH_JSON__;
     const $ = (id) => document.getElementById(id);
-    const state = { lang: 'zh', previewTab: 'gantt', tasks: [], showStatus: false, activeTemplate: 'ar', activeStage: '', dragId: null };
+    const state = { lang: 'zh', previewTab: 'gantt', tasks: [], showStatus: false, activeTemplate: 'ar', activeStage: '', dragId: null, dragStage: '' };
     const translations = {
       zh: {
         appTitle: '项目排期工作台', subtitle: '快速制作 Timeline、甘特图和 Excel 排期表，用于内部协作与客户交付。', projectTitle: '项目标题', projectPlaceholder: '请输入项目标题',
         taskTableTitle: '任务排期表格', taskTableDesc: '',
         addTask: '+ 新增任务', reset: '重置', stage: '阶段', taskName: '任务', stakeholder: '负责人', status: '状态', startDate: '开始日期', endDate: '结束日期', workdays: '工作日', actions: '操作',
         templatesTitle: '排期模版', templatesDesc: '内置模板不会因为清空缓存丢失；套用后只修改当前任务。', fieldOptionsTitle: '可选展示字段', fieldOptionsDesc: '阶段始终展示并导出；这里仅控制状态列。',
-        schedulePreview: '排期预览', ganttView: '甘特图', excelView: '表格', exportExcel: '导出 Excel', importSchedule: '导入排期', importYearPlaceholder: '导入年份（可选）', importPreview: '导入预览', importSheet: '工作表', importYear: '年份', importMonthRange: '月份范围', importDateRange: '日期范围', importTaskCount: '任务数量', importValidTaskCount: '成功识别日期的任务', importConfirm: '确认导入这些任务？', quickAdd: '快捷添加',
+        schedulePreview: '排期预览', ganttView: '甘特图', excelView: '表格', exportExcel: '导出 Excel', importSchedule: '导入排期', importYearPlaceholder: '导入年份（可选）', importPreview: '导入预览', importSheet: '工作表', importYear: '年份', importMonthRange: '月份范围', importDateRange: '日期范围', importTaskCount: '任务数量', importValidTaskCount: '成功识别日期的任务', importConfirm: '确认导入这些任务？', dragStage: '拖动调整阶段顺序', quickAdd: '快捷添加',
         currentStage: '当前阶段', stageNamePlaceholder: '阶段名称',
         stageCount: '阶段数量', totalWorkweeks: '总工作周', totalWorkdays: '总工作日', riskItems: '风险项', unnamed: '', empty: '请添加任务并填写日期后查看排期。', invalidDate: '日期错误',
         generated: 'Timeline 已生成，你可以导出 Excel 给团队使用。', importSuccess: '排期已导入，你可以继续编辑或导出 Excel。', importError: '无法识别这个排期文件，请检查日期轴、月份标题和任务条背景色。', exportError: '请至少添加一个任务，并填写开始日期和结束日期。', rowDateError: '第 {n} 行结束日期不能早于开始日期。', nameRequired: '第 {n} 行缺少任务名称。', dateRequired: '第 {n} 行缺少开始日期或结束日期。',
@@ -598,7 +603,7 @@ INDEX_HTML = r"""<!doctype html>
         taskTableTitle: 'Schedule Table', taskTableDesc: '',
         addTask: '+ Add task', reset: 'Reset', stage: 'Stage', taskName: 'Task', stakeholder: 'Owner', status: 'Status', startDate: 'Start Date', endDate: 'End Date', workdays: 'Workdays', actions: 'Actions',
         templatesTitle: 'Schedule Templates', templatesDesc: 'Built-in templates do not depend on browser cache. Applying one only edits current tasks.', fieldOptionsTitle: 'Optional Fields', fieldOptionsDesc: 'Stage is always shown and exported. This only controls Status.',
-        schedulePreview: 'Schedule Preview', ganttView: 'Gantt', excelView: 'Table', exportExcel: 'Export Excel', importSchedule: 'Import Schedule', importYearPlaceholder: 'Import year (optional)', importPreview: 'Import preview', importSheet: 'Sheet', importYear: 'Year', importMonthRange: 'Months', importDateRange: 'Date range', importTaskCount: 'Tasks', importValidTaskCount: 'Tasks with dates', importConfirm: 'Import these tasks?', quickAdd: 'Quick add',
+        schedulePreview: 'Schedule Preview', ganttView: 'Gantt', excelView: 'Table', exportExcel: 'Export Excel', importSchedule: 'Import Schedule', importYearPlaceholder: 'Import year (optional)', importPreview: 'Import preview', importSheet: 'Sheet', importYear: 'Year', importMonthRange: 'Months', importDateRange: 'Date range', importTaskCount: 'Tasks', importValidTaskCount: 'Tasks with dates', importConfirm: 'Import these tasks?', dragStage: 'Drag to reorder stages', quickAdd: 'Quick add',
         currentStage: 'Current Stage', stageNamePlaceholder: 'Stage name',
         stageCount: 'Stages', totalWorkweeks: 'Work Weeks', totalWorkdays: 'Workdays', riskItems: 'Risks', unnamed: '', empty: 'Add tasks and dates to preview the schedule.', invalidDate: 'Date error',
         generated: 'Timeline generated. You can export Excel for your team.', importSuccess: 'Schedule imported. You can keep editing or export Excel.', importError: 'Unable to read this schedule. Check the date axis, month headers, and task-bar fills.', exportError: 'Please add at least one task with start and end dates.', rowDateError: 'Row {n}: end date cannot be earlier than start date.', nameRequired: 'Row {n} is missing a task name.', dateRequired: 'Row {n} is missing a start or end date.',
@@ -917,6 +922,31 @@ INDEX_HTML = r"""<!doctype html>
       state.tasks.splice(Math.max(0, Math.min(to, state.tasks.length)), 0, item);
       renderAll();
     }
+    function reorderStageTaskBlocks(tasks, stageOrder) {
+      const buckets = new Map(stageOrder.map(stage => [stage, []]));
+      tasks.forEach(task => {
+        const stage = normalizeStage(task.stage);
+        task.stage = stage;
+        if (!buckets.has(stage)) buckets.set(stage, []);
+        buckets.get(stage).push(task);
+      });
+      return stageOrder.flatMap(stage => buckets.get(stage) || []);
+    }
+    function clearStageDragIndicators() {
+      document.querySelectorAll('#stageTabs .stage-tab').forEach(tab => tab.classList.remove('stage-dragging', 'stage-drag-over-before', 'stage-drag-over-after'));
+    }
+    function reorderStages(dragStage, targetStage, position='before') {
+      const stages = getStageOrder();
+      const from = stages.indexOf(dragStage);
+      let to = stages.indexOf(targetStage);
+      if (from < 0 || to < 0 || from === to) return;
+      const [stage] = stages.splice(from, 1);
+      if (from < to) to -= 1;
+      if (position === 'after') to += 1;
+      stages.splice(Math.max(0, Math.min(to, stages.length)), 0, stage);
+      state.tasks = reorderStageTaskBlocks(state.tasks, stages);
+      renderAll();
+    }
     function removeTask(id) { state.tasks = state.tasks.filter(x => x.id !== id); renderAll(); }
     function duplicateTask(id) { const i = state.tasks.findIndex(x => x.id === id); if (i < 0) return; const copy = cloneTask(state.tasks[i]); state.tasks.splice(i + 1, 0, copy); state.activeStage = copy.stage; renderAll(); }
     function statusLabel(status) { return translations[state.lang].statuses[status] || status; }
@@ -941,11 +971,40 @@ INDEX_HTML = r"""<!doctype html>
         acc[stage] = state.tasks.filter(task => normalizeStage(task.stage) === stage).length;
         return acc;
       }, {});
-      $('stageTabs').innerHTML = stages.map((stage, index) => `<button type="button" class="stage-tab ${stage === active ? 'active' : ''}" data-stage-index="${index}"><span>${escapeHtml(stage)}</span><span class="stage-tab-count">${counts[stage] || 0}</span></button>`).join('');
-      document.querySelectorAll('[data-stage-index]').forEach(btn => btn.addEventListener('click', () => {
+      $('stageTabs').innerHTML = stages.map((stage, index) => `<button type="button" draggable="true" class="stage-tab ${stage === active ? 'active' : ''}" data-stage-index="${index}" data-stage="${escapeHtml(stage)}" title="${escapeHtml(t('dragStage'))}"><span>${escapeHtml(stage)}</span><span class="stage-tab-count">${counts[stage] || 0}</span></button>`).join('');
+      document.querySelectorAll('[data-stage-index]').forEach(btn => {
+        btn.addEventListener('click', () => {
         state.activeStage = stages[Number(btn.dataset.stageIndex)];
         renderAll();
-      }));
+        });
+        btn.addEventListener('dragstart', event => {
+          state.dragStage = btn.dataset.stage;
+          btn.classList.add('stage-dragging');
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData('text/plain', state.dragStage);
+        });
+        btn.addEventListener('dragend', () => {
+          state.dragStage = '';
+          clearStageDragIndicators();
+        });
+        btn.addEventListener('dragover', event => {
+          const dragStage = event.dataTransfer.getData('text/plain') || state.dragStage;
+          if (!dragStage || dragStage === btn.dataset.stage) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'move';
+          clearStageDragIndicators();
+          const rect = btn.getBoundingClientRect();
+          btn.classList.add(event.clientX < rect.left + rect.width / 2 ? 'stage-drag-over-before' : 'stage-drag-over-after');
+        });
+        btn.addEventListener('dragleave', () => btn.classList.remove('stage-drag-over-before', 'stage-drag-over-after'));
+        btn.addEventListener('drop', event => {
+          event.preventDefault();
+          const dragStage = event.dataTransfer.getData('text/plain') || state.dragStage;
+          const position = btn.classList.contains('stage-drag-over-after') ? 'after' : 'before';
+          clearStageDragIndicators();
+          reorderStages(dragStage, btn.dataset.stage, position);
+        });
+      });
       const input = $('stageNameInput');
       input.value = active;
       input.placeholder = t('stageNamePlaceholder');

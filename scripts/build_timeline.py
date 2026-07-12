@@ -271,8 +271,8 @@ def build_workbook(config: dict) -> Workbook:
     thin = Side(style="thin", color="B7B7B7")
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
     header_fill = PatternFill(fill_type="solid", start_color="FF000000", end_color="FF000000")
-    title_font = Font(name="Microsoft YaHei", size=12)
-    body_font = Font(name="Microsoft YaHei", size=8)
+    title_font = Font(name="Microsoft YaHei", size=16)
+    body_font = Font(name="Microsoft YaHei", size=11)
     header_font = Font(name="Microsoft YaHei", size=9, color="FFFFFFFF", bold=True)
 
     labels = {
@@ -409,7 +409,7 @@ def build_workbook(config: dict) -> Workbook:
             c.border = border
             font = copy(c.font)
             font.name = "Microsoft YaHei"
-            font.size = 8
+            font.size = 11
             c.font = font
             if col != description_col:
                 c.alignment = Alignment(horizontal="center", vertical="center")
