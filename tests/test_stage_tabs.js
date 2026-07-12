@@ -10,6 +10,16 @@ const html = execFileSync(
 );
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 assert.ok(script.includes('`${safeName}_Timeline.xlsx`'), 'download suffix must use capital Timeline');
+assert.ok(script.includes('calendar-day-note'), 'date picker must visibly mark adjusted workdays');
+const calendarStart = script.indexOf('const CHINA_PUBLIC_HOLIDAYS');
+const calendarEnd = script.indexOf('\n    function daysLabel', calendarStart);
+assert.notEqual(calendarStart, -1, 'calendar workday rules must be present');
+assert.notEqual(calendarEnd, -1, 'calendar workday rules must end before labels');
+const calendarContext = {};
+vm.runInNewContext(script.slice(calendarStart, calendarEnd), calendarContext);
+assert.equal(calendarContext.isTimelineWorkday(new Date(2026, 8, 20)), true);
+assert.equal(calendarContext.countWorkdays('2026-09-18', '2026-09-21'), 3);
+assert.equal(calendarContext.isTimelineWorkday(new Date(2026, 8, 25)), false);
 const start = script.indexOf('function reorderStageTaskBlocks');
 const end = script.indexOf('\n    function clearStageDragIndicators', start);
 assert.notEqual(start, -1, 'stage reorder helper must be present');

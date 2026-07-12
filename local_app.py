@@ -289,11 +289,14 @@ INDEX_HTML = r"""<!doctype html>
     .calendar-nav button:hover { border-color: #b7ccff; background:#e5efff; }
     .calendar-week, .calendar-grid { display:grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
     .calendar-week { margin-bottom: 6px; color:#8392a9; font-size:10px; font-weight:950; text-align:center; }
-    .calendar-day { height: 32px; font-size: 12px; cursor:pointer; }
+    .calendar-day { position: relative; height: 32px; font-size: 12px; cursor:pointer; }
     .calendar-day:hover { background: var(--primary-soft); border-color:#b7ccff; color: var(--primary); }
     .calendar-day.muted { color:#bdc6d5; }
     .calendar-day.today { border-color:#9ebcff; }
+    .calendar-day.adjusted-workday { color: #6d28d9; border-color: #c4b5fd; background: #f5f3ff; }
+    .calendar-day-note { position: absolute; right: 2px; bottom: 1px; min-width: 11px; color: #7c3aed; font-size: 8px; font-weight: 950; line-height: 1; }
     .calendar-day.selected { background: var(--primary); color:#fff; box-shadow:0 8px 18px rgba(15,98,223,.25); }
+    .calendar-day.selected.adjusted-workday .calendar-day-note { color: #fff; }
     .calendar-foot { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-2); }
     .calendar-foot button { height: 30px; border-radius: 10px; border: 1px solid var(--line); background:#fff; padding: 0 10px; font-size:12px; font-weight:900; color:#334155; }
     .calendar-foot button.primary-lite { background: var(--primary-soft); color: var(--primary); border-color:#b7ccff; }
@@ -595,7 +598,7 @@ INDEX_HTML = r"""<!doctype html>
         generated: 'Timeline 已生成，你可以导出 Excel 给团队使用。', importSuccess: '排期已导入，你可以继续编辑或导出 Excel。', importError: '无法识别这个排期文件，请检查日期轴、月份标题和任务条背景色。', exportError: '请至少添加一个任务，并填写开始日期和结束日期。', rowDateError: '第 {n} 行结束日期不能早于开始日期。', nameRequired: '第 {n} 行缺少任务名称。', dateRequired: '第 {n} 行缺少开始日期或结束日期。',
         daysUnit: '{n} 天', oneDay: '1 天',
         statuses: { incomplete: '未完成', done: '已完成' },
-        selectStart: '选择开始日期', selectEnd: '选择结束日期', today: '今天', clearDate: '清空', previewTaskColumn: '任务 / 事项',
+        selectStart: '选择开始日期', selectEnd: '选择结束日期', today: '今天', clearDate: '清空', adjustedWorkday: '调休上班', adjustedWorkdayBadge: '班', previewTaskColumn: '任务 / 事项',
         templates: { ar: ['✨ AR 项目', '需求、内容物料、内容制作、开发、UAT、上线。'], threed: ['3D 项目', '按 3D 项目标准事项自动创建完整排期。'], digital: ['数字化项目', '需求、配置、数据准备、开发联调、UAT、上线。'] }
       },
       en: {
@@ -609,7 +612,7 @@ INDEX_HTML = r"""<!doctype html>
         generated: 'Timeline generated. You can export Excel for your team.', importSuccess: 'Schedule imported. You can keep editing or export Excel.', importError: 'Unable to read this schedule. Check the date axis, month headers, and task-bar fills.', exportError: 'Please add at least one task with start and end dates.', rowDateError: 'Row {n}: end date cannot be earlier than start date.', nameRequired: 'Row {n} is missing a task name.', dateRequired: 'Row {n} is missing a start or end date.',
         daysUnit: '{n} days', oneDay: '1 day',
         statuses: { incomplete: 'Incomplete', done: 'Done' },
-        selectStart: 'Select start date', selectEnd: 'Select end date', today: 'Today', clearDate: 'Clear', previewTaskColumn: 'Task',
+        selectStart: 'Select start date', selectEnd: 'Select end date', today: 'Today', clearDate: 'Clear', adjustedWorkday: 'Adjusted workday', adjustedWorkdayBadge: 'Work', previewTaskColumn: 'Task',
         templates: { ar: ['✨ AR Project', 'Requirement, assets, production, development, UAT and launch.'], threed: ['3D Project', 'Auto-create a full 3D project schedule.'], digital: ['Digitalization Project', 'Requirement, setup, data prep, development, UAT and launch.'] }
       }
     };
@@ -743,13 +746,36 @@ INDEX_HTML = r"""<!doctype html>
     function uid() { return 'task-' + Math.random().toString(16).slice(2) + Date.now().toString(16); }
     function escapeHtml(value) { return String(value ?? '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch])); }
     function withReplacements(text, values) { return text.replace(/\{(\w+)\}/g, (_, key) => values[key] ?? ''); }
+    const CHINA_PUBLIC_HOLIDAYS = new Set([
+      '2026-01-01', '2026-01-02', '2026-01-03',
+      '2026-02-15', '2026-02-16', '2026-02-17', '2026-02-18', '2026-02-19', '2026-02-20', '2026-02-21', '2026-02-22', '2026-02-23',
+      '2026-04-04', '2026-04-05', '2026-04-06',
+      '2026-05-01', '2026-05-02', '2026-05-03', '2026-05-04', '2026-05-05',
+      '2026-06-19', '2026-06-20', '2026-06-21',
+      '2026-09-25', '2026-09-26', '2026-09-27',
+      '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05', '2026-10-06', '2026-10-07'
+    ]);
+    const CHINA_ADJUSTED_WORKDAYS = new Set(['2026-01-04', '2026-02-14', '2026-02-28', '2026-05-09', '2026-09-20', '2026-10-10']);
+    function toISODate(day) {
+      const y = day.getFullYear();
+      const m = String(day.getMonth() + 1).padStart(2, '0');
+      const d = String(day.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+    function isAdjustedWorkday(iso) { return CHINA_ADJUSTED_WORKDAYS.has(iso); }
+    function isTimelineWorkday(day) {
+      const iso = toISODate(day);
+      if (isAdjustedWorkday(iso)) return true;
+      if (CHINA_PUBLIC_HOLIDAYS.has(iso)) return false;
+      return day.getDay() !== 0 && day.getDay() !== 6;
+    }
     function parseDate(value) { if (!value) return null; const d = new Date(value + 'T00:00:00'); return Number.isNaN(d.getTime()) ? null : d; }
     function isInvalidRange(task) { const s = parseDate(task.start); const e = parseDate(task.end); return !!(s && e && e < s); }
     function countWorkdays(startValue, endValue) {
       const start = parseDate(startValue), end = parseDate(endValue);
       if (!start || !end || end < start) return 0;
       let count = 0; const cursor = new Date(start);
-      while (cursor <= end) { const day = cursor.getDay(); if (day !== 0 && day !== 6) count++; cursor.setDate(cursor.getDate() + 1); }
+      while (cursor <= end) { if (isTimelineWorkday(cursor)) count++; cursor.setDate(cursor.getDate() + 1); }
       return count;
     }
     function daysLabel(n) { return n === 1 ? t('oneDay') : withReplacements(t('daysUnit'), { n }); }
@@ -765,12 +791,6 @@ INDEX_HTML = r"""<!doctype html>
       clearTimeout(showMessage.timer); showMessage.timer = setTimeout(() => el.className = 'message', 3200);
     }
 
-    function toISODate(day) {
-      const y = day.getFullYear();
-      const m = String(day.getMonth() + 1).padStart(2, '0');
-      const d = String(day.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
-    }
     function openDatePicker(taskId, field, anchor) {
       const task = state.tasks.find(x => x.id === taskId);
       if (!task) return;
@@ -808,7 +828,11 @@ INDEX_HTML = r"""<!doctype html>
         if (d.getMonth() !== month.getMonth()) classes.push('muted');
         if (iso === today) classes.push('today');
         if (iso === picker.selected) classes.push('selected');
-        days.push(`<button type="button" class="${classes.join(' ')}" data-date-value="${iso}">${d.getDate()}</button>`);
+        const adjusted = isAdjustedWorkday(iso);
+        if (adjusted) classes.push('adjusted-workday');
+        const note = adjusted ? `<span class="calendar-day-note">${escapeHtml(t('adjustedWorkdayBadge'))}</span>` : '';
+        const label = adjusted ? `${iso} ${t('adjustedWorkday')}` : iso;
+        days.push(`<button type="button" class="${classes.join(' ')}" data-date-value="${iso}" aria-label="${escapeHtml(label)}" title="${escapeHtml(adjusted ? t('adjustedWorkday') : '')}"><span>${d.getDate()}</span>${note}</button>`);
       }
       pop.innerHTML = `<div class="calendar-head"><div class="calendar-title">${title}</div><div class="calendar-nav"><button type="button" data-cal-prev>‹</button><button type="button" data-cal-next>›</button></div></div><div class="calendar-week">${week.map(x => `<span>${x}</span>`).join('')}</div><div class="calendar-grid">${days.join('')}</div><div class="calendar-foot"><button type="button" data-cal-clear>${t('clearDate')}</button><button type="button" class="primary-lite" data-cal-today>${t('today')}</button></div>`;
       pop.hidden = false;
