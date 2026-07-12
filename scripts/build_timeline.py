@@ -274,6 +274,7 @@ def build_workbook(config: dict) -> Workbook:
     header_fill = PatternFill(fill_type="solid", start_color="FF000000", end_color="FF000000")
     title_font = Font(name=EXPORT_FONT_NAME, size=16)
     body_font = Font(name=EXPORT_FONT_NAME, size=11)
+    model_font = Font(name=EXPORT_FONT_NAME, size=11, scheme=None)
     header_font = Font(name=EXPORT_FONT_NAME, size=11, color="FFFFFFFF", bold=True)
 
     labels = {
@@ -411,6 +412,9 @@ def build_workbook(config: dict) -> Workbook:
             font = copy(c.font)
             font.name = EXPORT_FONT_NAME
             font.size = 11
+            font.scheme = None
+            font.family = None
+            font.charset = None
             c.font = font
             if col != description_col:
                 c.alignment = Alignment(horizontal="center", vertical="center")
@@ -425,8 +429,10 @@ def build_workbook(config: dict) -> Workbook:
                 group_end += 1
             if group_end > group_start:
                 ws.merge_cells(start_row=group_start, start_column=model_col, end_row=group_end, end_column=model_col)
+            # OOXML keeps a merged range's visible style on its top-left anchor cell.
             cell = ws.cell(group_start, model_col)
             cell.value = model
+            cell.font = copy(model_font)
             cell.alignment = Alignment(horizontal="center", vertical="center")
             group_start = group_end + 1
 

@@ -29,6 +29,7 @@ class TimelineExportOrderTests(unittest.TestCase):
         self.assertEqual(worksheet["A3"].font.sz, 11)
         self.assertEqual(worksheet["E4"].font.sz, 11)
         self.assertEqual(worksheet["A5"].font.sz, 11)
+        self.assertIsNone(worksheet["A5"].font.scheme)
         self.assertEqual(worksheet["B5"].font.sz, 11)
         for coordinate in ("A3", "E4", "A5", "B5"):
             self.assertEqual(worksheet[coordinate].font.name, "Gotham")
