@@ -24,6 +24,7 @@ FORBIDDEN_YELLOWS = {"FFC000", "FFFF00", "FFFFFF00", "FFFF99", "FFF2CC"}
 TIMELINE_CELL_PX = 30
 TIMELINE_COLUMN_WIDTH = 3.6
 TIMELINE_ROW_HEIGHT_PT = 22.5
+EXPORT_FONT_NAME = "Gotham"
 CATEGORY_COLORS = {
     "planning": ["A9D08E", "5B9BD5", "F8CBAD"],
     "compliance": ["F8CBAD", "757171", "5B9BD5"],
@@ -271,9 +272,9 @@ def build_workbook(config: dict) -> Workbook:
     thin = Side(style="thin", color="B7B7B7")
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
     header_fill = PatternFill(fill_type="solid", start_color="FF000000", end_color="FF000000")
-    title_font = Font(name="Microsoft YaHei", size=16)
-    body_font = Font(name="Microsoft YaHei", size=11)
-    header_font = Font(name="Microsoft YaHei", size=9, color="FFFFFFFF", bold=True)
+    title_font = Font(name=EXPORT_FONT_NAME, size=16)
+    body_font = Font(name=EXPORT_FONT_NAME, size=11)
+    header_font = Font(name=EXPORT_FONT_NAME, size=11, color="FFFFFFFF", bold=True)
 
     labels = {
         "zh": {"model": "工作内容", "description": "事项", "kivisense": "弥知科技", "brands": "品牌方", "status": "状态", "done": "完成", "incomplete": "未完成"},
@@ -401,14 +402,14 @@ def build_workbook(config: dict) -> Workbook:
             if not image_added:
                 star_cell = ws.cell(row_offset, end_col)
                 star_cell.value = "★"
-                star_cell.font = Font(name="Microsoft YaHei", size=11, bold=True, color="C00000")
+                star_cell.font = Font(name=EXPORT_FONT_NAME, size=11, bold=True, color="C00000")
                 star_cell.alignment = Alignment(horizontal="center", vertical="center")
 
         for col in range(1, last_col + 1):
             c = ws.cell(row_offset, col)
             c.border = border
             font = copy(c.font)
-            font.name = "Microsoft YaHei"
+            font.name = EXPORT_FONT_NAME
             font.size = 11
             c.font = font
             if col != description_col:

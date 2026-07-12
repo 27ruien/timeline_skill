@@ -25,8 +25,13 @@ class TimelineExportOrderTests(unittest.TestCase):
         stage_starts = [worksheet.cell(row, 1).value for row in range(5, 9) if worksheet.cell(row, 1).value]
         self.assertEqual(stage_starts, ["Development", "Requirement", "Proposal"])
         self.assertEqual(worksheet["B1"].font.sz, 16)
+        self.assertEqual(worksheet["B1"].font.name, "Gotham")
+        self.assertEqual(worksheet["A3"].font.sz, 11)
+        self.assertEqual(worksheet["E4"].font.sz, 11)
         self.assertEqual(worksheet["A5"].font.sz, 11)
         self.assertEqual(worksheet["B5"].font.sz, 11)
+        for coordinate in ("A3", "E4", "A5", "B5"):
+            self.assertEqual(worksheet[coordinate].font.name, "Gotham")
 
 
 if __name__ == "__main__":
