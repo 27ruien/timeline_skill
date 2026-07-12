@@ -312,7 +312,7 @@ def build_workbook(config: dict) -> Workbook:
             logo_height = 98
             logo.width = logo_width
             logo.height = logo_height
-            logo.anchor = one_cell_image_anchor(1, 1, logo_width, logo_height, 20, 0)
+            logo.anchor = one_cell_image_anchor(1, 1, logo_width, logo_height, 2, 6)
             ws.add_image(logo)
         except Exception:
             # If Pillow is not installed or cannot load image assets, keep export working.

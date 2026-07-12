@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from scripts.build_timeline import build_workbook
+from openpyxl.utils.units import pixels_to_EMU
 
 
 class TimelineExportOrderTests(unittest.TestCase):
@@ -33,7 +34,9 @@ class TimelineExportOrderTests(unittest.TestCase):
         self.assertEqual(worksheet["B5"].font.sz, 11)
         for coordinate in ("A3", "E4", "A5", "B5"):
             self.assertEqual(worksheet[coordinate].font.name, "Gotham")
-        self.assertEqual(worksheet._images[0].anchor._from.rowOff, 0)
+        logo_anchor = worksheet._images[0].anchor._from
+        self.assertEqual(logo_anchor.colOff, pixels_to_EMU(2))
+        self.assertEqual(logo_anchor.rowOff, pixels_to_EMU(6))
 
 if __name__ == "__main__":
     unittest.main()
