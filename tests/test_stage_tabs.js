@@ -9,6 +9,7 @@ const html = execFileSync(
   { encoding: 'utf8' },
 );
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+assert.ok(script.includes('`${safeName}_Timeline.xlsx`'), 'download suffix must use capital Timeline');
 const start = script.indexOf('function reorderStageTaskBlocks');
 const end = script.indexOf('\n    function clearStageDragIndicators', start);
 assert.notEqual(start, -1, 'stage reorder helper must be present');

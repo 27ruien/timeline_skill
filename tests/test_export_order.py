@@ -33,7 +33,7 @@ class TimelineExportOrderTests(unittest.TestCase):
         self.assertEqual(worksheet["B5"].font.sz, 11)
         for coordinate in ("A3", "E4", "A5", "B5"):
             self.assertEqual(worksheet[coordinate].font.name, "Gotham")
-
+        self.assertEqual(worksheet._images[0].anchor._from.rowOff, 0)
 
 if __name__ == "__main__":
     unittest.main()

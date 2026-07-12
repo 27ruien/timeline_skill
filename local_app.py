@@ -1233,7 +1233,7 @@ INDEX_HTML = r"""<!doctype html>
         if (!response.ok) { const problem = await response.json().catch(() => ({ error: 'Export failed' })); throw new Error(problem.error || 'Export failed'); }
         const blob = await response.blob(); const url = URL.createObjectURL(blob);
         const safeName = ($('projectName').value || 'timeline').replace(/[\\/:*?"<>|\s]+/g, '_');
-        const a = document.createElement('a'); a.href = url; a.download = `${safeName}_timeline.xlsx`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+        const a = document.createElement('a'); a.href = url; a.download = `${safeName}_Timeline.xlsx`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
         showMessage(t('generated'));
       } catch (err) { showMessage(err.message, 'error'); }
     }
